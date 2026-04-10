@@ -28,22 +28,16 @@ export class CanvasManager {
 
     const drawW = imgW * scale;
     const drawH = imgH * scale;
-
-    // Center + pan offset
     const offsetX = (canvasW - drawW) / 2 + panX;
     const offsetY = (canvasH - drawH) / 2 + panY;
-
-    // Draw to a temporary OffscreenCanvas then blit
     const tempCanvas = new OffscreenCanvas(imgW, imgH);
     const tempCtx = tempCanvas.getContext('2d');
     tempCtx.putImageData(imageData, 0, 0);
-
     ctx.save();
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(tempCanvas, offsetX, offsetY, drawW, drawH);
     ctx.restore();
-
     return { scale, offsetX, offsetY, drawW, drawH };
   }
 
