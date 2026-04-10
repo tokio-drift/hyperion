@@ -2,16 +2,20 @@ import { useRef, useEffect, useCallback } from 'react';
 
 const WORKER_URL = new URL('../workers/imageProcessor.worker.js', import.meta.url);
 
-/**
- * useImageProcessor
- * Manages a Web Worker for off-thread pixel processing.
- * Returns { processImage, rotateImage, cropImage, terminate }
- */
 export function useImageProcessor({ onResult, onError } = {}) {
   const workerRef    = useRef(null);
   const pendingRef   = useRef(null);
   const busyRef      = useRef(false);
   const jobIdRef     = useRef(0);
+
+  // --- FIX 1: Keep callbacks fresh to prevent stale closures ---
+  const onResultRef = useRef(onResult);
+  const onErrorRef = useRef(onError);
+
+  useEffect(() => {
+    onResultRef.current = onResult;
+    onErrorRef.current = onError;
+  }, [onResult, onError]);
 
   // Boot worker
   useEffect(() => {
@@ -25,9 +29,10 @@ export function useImageProcessor({ onResult, onError } = {}) {
       if (type === 'DONE') {
         const buffer = new Uint8ClampedArray(pixelData);
         const imageData = new ImageData(buffer, width, height);
-        onResult?.(imageData, id);
+        // Use the ref to guarantee we have the latest state!
+        onResultRef.current?.(imageData, id);
       } else if (type === 'ERROR') {
-        onError?.(e.data.message, id);
+        onErrorRef.current?.(e.data.message, id);
       }
 
       // Drain queue
@@ -40,7 +45,7 @@ export function useImageProcessor({ onResult, onError } = {}) {
 
     worker.onerror = (err) => {
       busyRef.current = false;
-      onError?.(err.message);
+      onErrorRef.current?.(err.message);
     };
 
     return () => worker.terminate();
@@ -63,11 +68,8 @@ export function useImageProcessor({ onResult, onError } = {}) {
       height: originalData.height,
       adjustments,
     };
-    if (busyRef.current) {
-      pendingRef.current = msg; // Only keep latest
-    } else {
-      _send(msg);
-    }
+    if (busyRef.current) pendingRef.current = msg;
+    else _send(msg);
     return id;
   }, []);
 
