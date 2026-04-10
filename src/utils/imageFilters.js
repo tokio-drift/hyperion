@@ -1,13 +1,7 @@
-/**
- * imageFilters.js
- * Pure pixel-manipulation functions operating on Uint8ClampedArray (RGBA).
- * Each function mutates the data in-place for performance.
- * Call order: exposure -> brightness -> contrast -> highlights -> shadows -> whites -> blacks
- */
-
+import { rgbToHsl, hslToRgb } from './colourUtils.js';
 export const clamp = (x) => Math.max(0, Math.min(255, Math.round(x)));
+const clamp01 = (x) => Math.max(0, Math.min(1, x));
 const luma = (r, g, b) => 0.299 * r + 0.587 * g + 0.114 * b;
-
 export function applyExposure(data, v) {
   if (v === 0) return;
   const factor = Math.pow(2, (v / 100) * 3.32);
@@ -96,28 +90,88 @@ export function applyBlacks(data, v) {
   }
 }
 
+export function applyTemperature(data, v) {
+  if (v === 0) return;
+  const shift = v * 1.2;
+  for (let i = 0; i < data.length; i += 4) {
+    data[i]     = clamp(data[i] + shift);    
+    data[i + 2] = clamp(data[i + 2] - shift);
+  }
+}
+
+export function applyTint(data, v) {
+  if (v === 0) return;
+  const shift = v * 0.8;
+  for (let i = 0; i < data.length; i += 4) {
+    data[i]     = clamp(data[i] + shift);
+    data[i + 1] = clamp(data[i + 1] - shift); 
+    data[i + 2] = clamp(data[i + 2] + shift); 
+  }
+}
+
+export function applyColourGroup(data, hue, saturation, vibrance) {
+  if (hue === 0 && saturation === 0 && vibrance === 0) return;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i], g = data[i + 1], b = data[i + 2];
+    let { h, s, l } = rgbToHsl(r, g, b);
+    if (s < 0.01 && hue !== 0 && saturation === 0 && vibrance === 0) {
+      continue;
+    }
+
+    if (hue !== 0) {
+      h = (h + hue + 360) % 360;
+    }
+
+    if (saturation !== 0) {
+      if (saturation >= 0) {
+        s = s + (1 - s) * (saturation / 100);
+      } else {
+        s = s + s * (saturation / 100);
+      }
+    }
+
+    if (vibrance !== 0) {
+      let scale = (1 - s) * (vibrance / 100);
+      if (vibrance >= 0) {
+        if (h >= 20 && h <= 40) scale *= 0.7;
+        s = s + scale;
+      } else {
+        s = s + s * (vibrance / 100);
+      }
+    }
+
+    s = clamp01(s);
+    const rgb = hslToRgb(h, s, l);
+    
+    data[i]     = rgb.r;
+    data[i + 1] = rgb.g;
+    data[i + 2] = rgb.b;
+  }
+}
+
 export function applyAllAdjustments(originalData, adjustments) {
   const {
     exposure = 0, brightness = 0, contrast = 0,
     highlights = 0, shadows = 0, whites = 0, blacks = 0,
+    temperature = 0, tint = 0, hue = 0, saturation = 0, vibrance = 0
   } = adjustments;
 
   const buffer = new Uint8ClampedArray(originalData.data);
-  const allZero = [exposure, brightness, contrast, highlights, shadows, whites, blacks].every(v => v === 0);
-
-  if (!allZero) {
-    applyExposure(buffer, exposure);
-    applyBrightness(buffer, brightness);
-    applyContrast(buffer, contrast);
-    applyHighlights(buffer, highlights);
-    applyShadows(buffer, shadows);
-    applyWhites(buffer, whites);
-    applyBlacks(buffer, blacks);
-  }
+  
+  applyExposure(buffer, exposure);
+  applyBrightness(buffer, brightness);
+  applyContrast(buffer, contrast);
+  applyHighlights(buffer, highlights);
+  applyShadows(buffer, shadows);
+  applyWhites(buffer, whites);
+  applyBlacks(buffer, blacks);
+  applyTemperature(buffer, temperature);
+  applyTint(buffer, tint);
+  applyColourGroup(buffer, hue, saturation, vibrance);
 
   return new ImageData(buffer, originalData.width, originalData.height);
 }
-
 export function rotateImageData(imageData, direction) {
   const { width, height, data } = imageData;
   const result = new Uint8ClampedArray(width * height * 4);
@@ -143,7 +197,6 @@ export function rotateImageData(imageData, direction) {
   }
   return new ImageData(result, newW, width);
 }
-
 export function cropImageData(imageData, x, y, cw, ch) {
   const { width, data } = imageData;
   const result = new Uint8ClampedArray(cw * ch * 4);

@@ -1,11 +1,13 @@
 import React from 'react';
 import { useEditor } from '../../context/EditorContext';
 import TonalPanel from './TonalPanel';
+import ColourPanel from './ColourPanel';
 import DimensionPanel from './DimensionPanel';
 import HistoryPanel from './HistoryPanel';
 
 const TABS = [
   { id: 'tonal',     label: 'Light' },
+  { id: 'colour',    label: 'Colour' }, // --- Increment 2 ---
   { id: 'dimension', label: 'Crop' },
   { id: 'history',   label: 'History' },
 ];
@@ -47,6 +49,7 @@ export default function SidePanel() {
           {/* Panel content */}
           <div className="flex-1 overflow-hidden flex flex-col">
             {activePanelTab === 'tonal'     && <TonalPanel />}
+            {activePanelTab === 'colour'    && <ColourPanel />}
             {activePanelTab === 'dimension' && <DimensionPanel />}
             {activePanelTab === 'history'   && <HistoryPanel />}
           </div>

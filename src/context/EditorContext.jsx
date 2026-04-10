@@ -3,6 +3,7 @@ import React, { createContext, useContext, useReducer, useCallback } from 'react
 export const defaultAdjustments = {
   exposure: 0, contrast: 0, highlights: 0,
   shadows: 0, whites: 0, blacks: 0, brightness: 0,
+  hue: 0, saturation: 0, vibrance: 0, temperature: 0, tint: 0,
 };
 
 const initialState = {
@@ -77,7 +78,20 @@ function editorReducer(state, action) {
       const { imageId } = action.payload;
       return { ...state, adjustments: { ...state.adjustments, [imageId]: { ...defaultAdjustments } } };
     }
-
+    case 'RESET_COLOUR_ADJUSTMENTS': {
+      const { imageId } = action.payload;
+      const current = state.adjustments[imageId] || defaultAdjustments;
+      return { 
+        ...state, 
+        adjustments: { 
+          ...state.adjustments, 
+          [imageId]: { 
+            ...current, 
+            hue: 0, saturation: 0, vibrance: 0, temperature: 0, tint: 0 
+          } 
+        } 
+      };
+    }
     case 'PUSH_HISTORY': {
       const { imageId, label } = action.payload;
       const entry = makeEntry(label, state.adjustments[imageId] || defaultAdjustments, state.crop[imageId]);

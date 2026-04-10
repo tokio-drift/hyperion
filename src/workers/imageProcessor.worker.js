@@ -1,19 +1,10 @@
-/**
- * imageProcessor.worker.js
- * Web Worker that runs pixel filters off the main thread.
- *
- * Expected message payload:
- *   { type: 'PROCESS', id, pixelData (Uint8ClampedArray), width, height, adjustments }
- *   { type: 'ROTATE',  id, pixelData, width, height, direction }
- *   { type: 'CROP',    id, pixelData, width, height, x, y, cw, ch }
- *
- * Responds with:
- *   { type: 'DONE', id, pixelData, width, height }
- *   { type: 'ERROR', id, message }
- */
+import { 
+  applyTemperature, 
+  applyTint, 
+  applyColourGroup 
+} from '../utils/imageFilters.js';
 
-// ── Inline filter functions (can't import modules in all environments) ─────────
-
+// ── Inline tonal filters to prevent context switching overhead ─────────
 const clamp = (x) => Math.max(0, Math.min(255, Math.round(x)));
 const luma  = (r, g, b) => 0.299 * r + 0.587 * g + 0.114 * b;
 
@@ -103,6 +94,7 @@ function applyBlacks(data, v) {
   }
 }
 
+// ... keep existing rotatePixels & cropPixels ...
 function rotatePixels(data, width, height, direction) {
   const result = new Uint8ClampedArray(width * height * 4);
   const newW = height;
@@ -137,8 +129,6 @@ function cropPixels(data, srcWidth, x, y, cw, ch) {
   return result;
 }
 
-// ── Message handler ────────────────────────────────────────────────────────────
-
 self.onmessage = function (e) {
   const msg = e.data;
 
@@ -147,8 +137,11 @@ self.onmessage = function (e) {
       const { id, pixelData, width, height, adjustments } = msg;
       const buffer = new Uint8ClampedArray(pixelData);
 
-      const { exposure=0, brightness=0, contrast=0,
-              highlights=0, shadows=0, whites=0, blacks=0 } = adjustments;
+      const { 
+        exposure=0, brightness=0, contrast=0,
+        highlights=0, shadows=0, whites=0, blacks=0,
+        temperature=0, tint=0, hue=0, saturation=0, vibrance=0
+      } = adjustments;
 
       applyExposure(buffer, exposure);
       applyBrightness(buffer, brightness);
@@ -157,6 +150,11 @@ self.onmessage = function (e) {
       applyShadows(buffer, shadows);
       applyWhites(buffer, whites);
       applyBlacks(buffer, blacks);
+      
+      // Increment 2 pipeline
+      applyTemperature(buffer, temperature);
+      applyTint(buffer, tint);
+      applyColourGroup(buffer, hue, saturation, vibrance);
 
       self.postMessage(
         { type: 'DONE', id, pixelData: buffer.buffer, width, height },
