@@ -1,9 +1,23 @@
-import React, { createContext, useContext, useReducer, useCallback } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useReducer,
+  useCallback,
+} from "react";
 
 export const defaultAdjustments = {
-  exposure: 0, contrast: 0, highlights: 0,
-  shadows: 0, whites: 0, blacks: 0, brightness: 0,
-  hue: 0, saturation: 0, vibrance: 0, temperature: 0, tint: 0,
+  exposure: 0,
+  contrast: 0,
+  highlights: 0,
+  shadows: 0,
+  whites: 0,
+  blacks: 0,
+  brightness: 0,
+  hue: 0,
+  saturation: 0,
+  vibrance: 0,
+  temperature: 0,
+  tint: 0,
 };
 
 const initialState = {
@@ -16,16 +30,24 @@ const initialState = {
   compareMode: false,
   ui: {
     sidePanelOpen: true,
-    activePanelTab: 'tonal',
+    activePanelTab: "tonal",
     exportModalOpen: false,
   },
   toasts: [],
+  maskMode: false,
+  brushSettings: { size: 40, feather: 20, opacity: 100, tool: "paint" },
+  showMaskOverlay: true,
 };
 
 const MAX_HISTORY = 10;
 
 function makeEntry(label, adjustments, crop) {
-  return { timestamp: Date.now(), label, adjustments: { ...adjustments }, crop: crop ? { ...crop } : null };
+  return {
+    timestamp: Date.now(),
+    label,
+    adjustments: { ...adjustments },
+    crop: crop ? { ...crop } : null,
+  };
 }
 
 function pushHistory(entries, index, newEntry) {
@@ -36,8 +58,7 @@ function pushHistory(entries, index, newEntry) {
 
 function editorReducer(state, action) {
   switch (action.type) {
-
-    case 'LOAD_IMAGES': {
+    case "LOAD_IMAGES": {
       const newImages = action.payload;
       const merged = [...state.images];
       const adj = { ...state.adjustments };
@@ -46,59 +67,94 @@ function editorReducer(state, action) {
       const histIdx = { ...state.historyIndex };
 
       for (const img of newImages) {
-        if (!merged.find(m => m.id === img.id)) merged.push(img);
-        if (!adj[img.id])     adj[img.id]     = { ...defaultAdjustments };
-        if (!crop[img.id])    crop[img.id]    = { active: false, x: 0, y: 0, width: img.width, height: img.height, aspectRatio: null };
-        if (!hist[img.id])    { hist[img.id] = []; histIdx[img.id] = -1; }
+        if (!merged.find((m) => m.id === img.id)) merged.push(img);
+        if (!adj[img.id]) adj[img.id] = { ...defaultAdjustments };
+        if (!crop[img.id])
+          crop[img.id] = {
+            active: false,
+            x: 0,
+            y: 0,
+            width: img.width,
+            height: img.height,
+            aspectRatio: null,
+          };
+        if (!img.masks) {
+          img.masks = [];
+          img.activeMaskId = null;
+        }
+        if (!hist[img.id]) {
+          hist[img.id] = [];
+          histIdx[img.id] = -1;
+        }
       }
 
       return {
         ...state,
         images: merged,
         activeImageId: state.activeImageId || newImages[0]?.id || null,
-        adjustments: adj, crop, history: hist, historyIndex: histIdx,
+        adjustments: adj,
+        crop,
+        history: hist,
+        historyIndex: histIdx,
       };
     }
 
-    case 'SET_ACTIVE_IMAGE':
+    case "SET_ACTIVE_IMAGE":
       return { ...state, activeImageId: action.payload };
 
-    case 'UPDATE_ADJUSTMENT': {
+    case "UPDATE_ADJUSTMENT": {
       const { imageId, key, value } = action.payload;
       return {
         ...state,
         adjustments: {
           ...state.adjustments,
-          [imageId]: { ...(state.adjustments[imageId] || defaultAdjustments), [key]: value },
+          [imageId]: {
+            ...(state.adjustments[imageId] || defaultAdjustments),
+            [key]: value,
+          },
         },
       };
     }
 
-    case 'RESET_ADJUSTMENTS': {
+    case "RESET_ADJUSTMENTS": {
       const { imageId } = action.payload;
-      return { ...state, adjustments: { ...state.adjustments, [imageId]: { ...defaultAdjustments } } };
-    }
-    case 'RESET_COLOUR_ADJUSTMENTS': {
-      const { imageId } = action.payload;
-      const current = state.adjustments[imageId] || defaultAdjustments;
-      return { 
-        ...state, 
-        adjustments: { 
-          ...state.adjustments, 
-          [imageId]: { 
-            ...current, 
-            hue: 0, saturation: 0, vibrance: 0, temperature: 0, tint: 0 
-          } 
-        } 
+      return {
+        ...state,
+        adjustments: {
+          ...state.adjustments,
+          [imageId]: { ...defaultAdjustments },
+        },
       };
     }
-    case 'PUSH_HISTORY': {
+    case "RESET_COLOUR_ADJUSTMENTS": {
+      const { imageId } = action.payload;
+      const current = state.adjustments[imageId] || defaultAdjustments;
+      return {
+        ...state,
+        adjustments: {
+          ...state.adjustments,
+          [imageId]: {
+            ...current,
+            hue: 0,
+            saturation: 0,
+            vibrance: 0,
+            temperature: 0,
+            tint: 0,
+          },
+        },
+      };
+    }
+    case "PUSH_HISTORY": {
       const { imageId, label } = action.payload;
-      const entry = makeEntry(label, state.adjustments[imageId] || defaultAdjustments, state.crop[imageId]);
+      const entry = makeEntry(
+        label,
+        state.adjustments[imageId] || defaultAdjustments,
+        state.crop[imageId],
+      );
       const { entries, index } = pushHistory(
         state.history[imageId] || [],
         state.historyIndex[imageId] ?? -1,
-        entry
+        entry,
       );
       return {
         ...state,
@@ -107,7 +163,7 @@ function editorReducer(state, action) {
       };
     }
 
-    case 'UNDO': {
+    case "UNDO": {
       const { imageId } = action.payload;
       const idx = state.historyIndex[imageId] ?? -1;
       if (idx <= 0) return state;
@@ -115,13 +171,18 @@ function editorReducer(state, action) {
       const entry = state.history[imageId][prevIdx];
       return {
         ...state,
-        adjustments: { ...state.adjustments, [imageId]: { ...entry.adjustments } },
-        ...(entry.crop ? { crop: { ...state.crop, [imageId]: { ...entry.crop } } } : {}),
+        adjustments: {
+          ...state.adjustments,
+          [imageId]: { ...entry.adjustments },
+        },
+        ...(entry.crop
+          ? { crop: { ...state.crop, [imageId]: { ...entry.crop } } }
+          : {}),
         historyIndex: { ...state.historyIndex, [imageId]: prevIdx },
       };
     }
 
-    case 'REDO': {
+    case "REDO": {
       const { imageId } = action.payload;
       const entries = state.history[imageId] || [];
       const idx = state.historyIndex[imageId] ?? -1;
@@ -130,26 +191,36 @@ function editorReducer(state, action) {
       const entry = entries[nextIdx];
       return {
         ...state,
-        adjustments: { ...state.adjustments, [imageId]: { ...entry.adjustments } },
-        ...(entry.crop ? { crop: { ...state.crop, [imageId]: { ...entry.crop } } } : {}),
+        adjustments: {
+          ...state.adjustments,
+          [imageId]: { ...entry.adjustments },
+        },
+        ...(entry.crop
+          ? { crop: { ...state.crop, [imageId]: { ...entry.crop } } }
+          : {}),
         historyIndex: { ...state.historyIndex, [imageId]: nextIdx },
       };
     }
 
-    case 'JUMP_HISTORY': {
+    case "JUMP_HISTORY": {
       const { imageId, index } = action.payload;
       const entries = state.history[imageId] || [];
       if (index < 0 || index >= entries.length) return state;
       const entry = entries[index];
       return {
         ...state,
-        adjustments: { ...state.adjustments, [imageId]: { ...entry.adjustments } },
-        ...(entry.crop ? { crop: { ...state.crop, [imageId]: { ...entry.crop } } } : {}),
+        adjustments: {
+          ...state.adjustments,
+          [imageId]: { ...entry.adjustments },
+        },
+        ...(entry.crop
+          ? { crop: { ...state.crop, [imageId]: { ...entry.crop } } }
+          : {}),
         historyIndex: { ...state.historyIndex, [imageId]: index },
       };
     }
 
-    case 'CLEAR_HISTORY': {
+    case "CLEAR_HISTORY": {
       const { imageId } = action.payload;
       return {
         ...state,
@@ -158,16 +229,30 @@ function editorReducer(state, action) {
       };
     }
 
-    case 'SET_CROP': {
+    case "SET_CROP": {
       const { imageId, cropState } = action.payload;
-      return { ...state, crop: { ...state.crop, [imageId]: { ...state.crop[imageId], ...cropState } } };
+      return {
+        ...state,
+        crop: {
+          ...state.crop,
+          [imageId]: { ...state.crop[imageId], ...cropState },
+        },
+      };
     }
 
-    case 'APPLY_CROP': {
+    case "APPLY_CROP": {
       const { imageId } = action.payload;
       const crop = state.crop[imageId];
-      const entry = makeEntry('Crop applied', state.adjustments[imageId] || defaultAdjustments, crop);
-      const { entries, index } = pushHistory(state.history[imageId] || [], state.historyIndex[imageId] ?? -1, entry);
+      const entry = makeEntry(
+        "Crop applied",
+        state.adjustments[imageId] || defaultAdjustments,
+        crop,
+      );
+      const { entries, index } = pushHistory(
+        state.history[imageId] || [],
+        state.historyIndex[imageId] ?? -1,
+        entry,
+      );
       return {
         ...state,
         crop: { ...state.crop, [imageId]: { ...crop, active: false } },
@@ -176,16 +261,30 @@ function editorReducer(state, action) {
       };
     }
 
-    case 'CANCEL_CROP': {
+    case "CANCEL_CROP": {
       const { imageId } = action.payload;
-      return { ...state, crop: { ...state.crop, [imageId]: { ...state.crop[imageId], active: false } } };
+      return {
+        ...state,
+        crop: {
+          ...state.crop,
+          [imageId]: { ...state.crop[imageId], active: false },
+        },
+      };
     }
 
-    case 'ROTATE_IMAGE': {
+    case "ROTATE_IMAGE": {
       const { imageId, direction } = action.payload;
-      const label = direction === 'cw' ? 'Rotate 90° CW' : 'Rotate 90° CCW';
-      const entry = makeEntry(label, state.adjustments[imageId] || defaultAdjustments, state.crop[imageId]);
-      const { entries, index } = pushHistory(state.history[imageId] || [], state.historyIndex[imageId] ?? -1, entry);
+      const label = direction === "cw" ? "Rotate 90° CW" : "Rotate 90° CCW";
+      const entry = makeEntry(
+        label,
+        state.adjustments[imageId] || defaultAdjustments,
+        state.crop[imageId],
+      );
+      const { entries, index } = pushHistory(
+        state.history[imageId] || [],
+        state.historyIndex[imageId] ?? -1,
+        entry,
+      );
       return {
         ...state,
         history: { ...state.history, [imageId]: entries },
@@ -193,37 +292,195 @@ function editorReducer(state, action) {
       };
     }
 
-    case 'UPDATE_IMAGE_DATA': {
+    case "UPDATE_IMAGE_DATA": {
       const { imageId, originalData, width, height } = action.payload;
       return {
         ...state,
-        images: state.images.map(img => img.id === imageId ? { ...img, originalData, width, height } : img),
+        images: state.images.map((img) =>
+          img.id === imageId ? { ...img, originalData, width, height } : img,
+        ),
       };
     }
 
-    case 'TOGGLE_COMPARE':
+    case "TOGGLE_COMPARE":
       return { ...state, compareMode: action.payload ?? !state.compareMode };
 
-    case 'TOGGLE_SIDE_PANEL':
-      return { ...state, ui: { ...state.ui, sidePanelOpen: !state.ui.sidePanelOpen } };
+    case "TOGGLE_SIDE_PANEL":
+      return {
+        ...state,
+        ui: { ...state.ui, sidePanelOpen: !state.ui.sidePanelOpen },
+      };
 
-    case 'SET_PANEL_TAB':
+    case "SET_PANEL_TAB":
       return { ...state, ui: { ...state.ui, activePanelTab: action.payload } };
 
-    case 'OPEN_EXPORT_MODAL':
+    case "OPEN_EXPORT_MODAL":
       return { ...state, ui: { ...state.ui, exportModalOpen: true } };
 
-    case 'CLOSE_EXPORT_MODAL':
+    case "CLOSE_EXPORT_MODAL":
       return { ...state, ui: { ...state.ui, exportModalOpen: false } };
 
-    case 'ADD_TOAST': {
-      const toast = { id: action.payload.id || `${Date.now()}`, message: action.payload.message, type: action.payload.type || 'info' };
+    case "ADD_TOAST": {
+      const toast = {
+        id: action.payload.id || `${Date.now()}`,
+        message: action.payload.message,
+        type: action.payload.type || "info",
+      };
       return { ...state, toasts: [...state.toasts, toast] };
     }
 
-    case 'REMOVE_TOAST':
-      return { ...state, toasts: state.toasts.filter(t => t.id !== action.payload) };
+    case "REMOVE_TOAST":
+      return {
+        ...state,
+        toasts: state.toasts.filter((t) => t.id !== action.payload),
+      };
 
+    case "ADD_MASK": {
+      const { imageId } = action.payload;
+      return {
+        ...state,
+        images: state.images.map((img) => {
+          if (img.id !== imageId) return img;
+          const newMask = {
+            id: `mask-${Date.now()}`,
+            label: `Mask ${img.masks.length + 1}`,
+            maskData: new Uint8Array(img.width * img.height),
+            adjustments: { ...defaultAdjustments },
+            inverted: false,
+            visible: true,
+            isDirty: false,
+          };
+          return {
+            ...img,
+            masks: [...img.masks, newMask],
+            activeMaskId: newMask.id,
+          };
+        }),
+      };
+    }
+
+    case "DELETE_MASK": {
+      const { imageId, maskId } = action.payload;
+      return {
+        ...state,
+        images: state.images.map((img) => {
+          if (img.id !== imageId) return img;
+          const newMasks = img.masks.filter((m) => m.id !== maskId);
+          return {
+            ...img,
+            masks: newMasks,
+            activeMaskId:
+              newMasks.length > 0 ? newMasks[newMasks.length - 1].id : null,
+          };
+        }),
+      };
+    }
+
+    case "SET_ACTIVE_MASK": {
+      const { imageId, maskId } = action.payload;
+      return {
+        ...state,
+        images: state.images.map((img) =>
+          img.id === imageId ? { ...img, activeMaskId: maskId } : img,
+        ),
+      };
+    }
+
+    case "UPDATE_MASK_DATA": {
+      const { imageId, maskId, newMaskData, isDirty } = action.payload;
+      return {
+        ...state,
+        images: state.images.map((img) => {
+          if (img.id !== imageId) return img;
+          return {
+            ...img,
+            masks: img.masks.map((m) =>
+              m.id === maskId ? { ...m, maskData: newMaskData, isDirty } : m,
+            ),
+          };
+        }),
+      };
+    }
+
+    case "UPDATE_MASK_ADJUSTMENT": {
+      const { imageId, maskId, key, value } = action.payload;
+      return {
+        ...state,
+        images: state.images.map((img) => {
+          if (img.id !== imageId) return img;
+          return {
+            ...img,
+            masks: img.masks.map((m) =>
+              m.id === maskId
+                ? { ...m, adjustments: { ...m.adjustments, [key]: value } }
+                : m,
+            ),
+          };
+        }),
+      };
+    }
+
+    case "RESET_MASK_ADJUSTMENTS": {
+      const { imageId, maskId } = action.payload;
+      return {
+        ...state,
+        images: state.images.map((img) => {
+          if (img.id !== imageId) return img;
+          return {
+            ...img,
+            masks: img.masks.map((m) =>
+              m.id === maskId
+                ? { ...m, adjustments: { ...defaultAdjustments } }
+                : m,
+            ),
+          };
+        }),
+      };
+    }
+
+    case "INVERT_MASK": {
+      const { imageId, maskId } = action.payload;
+      return {
+        ...state,
+        images: state.images.map((img) => {
+          if (img.id !== imageId) return img;
+          return {
+            ...img,
+            masks: img.masks.map((m) =>
+              m.id === maskId ? { ...m, inverted: !m.inverted } : m,
+            ),
+          };
+        }),
+      };
+    }
+
+    case "TOGGLE_MASK_VISIBLE": {
+      const { imageId, maskId } = action.payload;
+      return {
+        ...state,
+        images: state.images.map((img) => {
+          if (img.id !== imageId) return img;
+          return {
+            ...img,
+            masks: img.masks.map((m) =>
+              m.id === maskId ? { ...m, visible: !m.visible } : m,
+            ),
+          };
+        }),
+      };
+    }
+
+    case "SET_MASK_MODE":
+      return { ...state, maskMode: action.payload };
+
+    case "UPDATE_BRUSH":
+      return {
+        ...state,
+        brushSettings: { ...state.brushSettings, ...action.payload },
+      };
+
+    case "TOGGLE_MASK_OVERLAY":
+      return { ...state, showMaskOverlay: !state.showMaskOverlay };
     default:
       return state;
   }
@@ -234,30 +491,45 @@ const EditorContext = createContext(null);
 export function EditorProvider({ children }) {
   const [state, dispatch] = useReducer(editorReducer, initialState);
 
-  const activeImage = state.images.find(img => img.id === state.activeImageId) || null;
+  const activeImage =
+    state.images.find((img) => img.id === state.activeImageId) || null;
   const activeAdjustments = state.activeImageId
-    ? (state.adjustments[state.activeImageId] || { ...defaultAdjustments })
+    ? state.adjustments[state.activeImageId] || { ...defaultAdjustments }
     : { ...defaultAdjustments };
-  const activeCrop = state.activeImageId ? (state.crop[state.activeImageId] || null) : null;
-  const activeHistory = state.activeImageId ? (state.history[state.activeImageId] || []) : [];
-  const activeHistoryIndex = state.activeImageId ? (state.historyIndex[state.activeImageId] ?? -1) : -1;
+  const activeCrop = state.activeImageId
+    ? state.crop[state.activeImageId] || null
+    : null;
+  const activeHistory = state.activeImageId
+    ? state.history[state.activeImageId] || []
+    : [];
+  const activeHistoryIndex = state.activeImageId
+    ? (state.historyIndex[state.activeImageId] ?? -1)
+    : -1;
   const canUndo = activeHistoryIndex > 0;
   const canRedo = activeHistoryIndex < activeHistory.length - 1;
 
-  const showToast = useCallback((message, type = 'info', duration = 3500) => {
+  const showToast = useCallback((message, type = "info", duration = 3500) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    dispatch({ type: 'ADD_TOAST', payload: { id, message, type } });
-    setTimeout(() => dispatch({ type: 'REMOVE_TOAST', payload: id }), duration);
+    dispatch({ type: "ADD_TOAST", payload: { id, message, type } });
+    setTimeout(() => dispatch({ type: "REMOVE_TOAST", payload: id }), duration);
   }, []);
 
   return (
-    <EditorContext.Provider value={{
-      state, dispatch,
-      activeImage, activeAdjustments, activeCrop,
-      activeHistory, activeHistoryIndex,
-      canUndo, canRedo,
-      showToast, defaultAdjustments,
-    }}>
+    <EditorContext.Provider
+      value={{
+        state,
+        dispatch,
+        activeImage,
+        activeAdjustments,
+        activeCrop,
+        activeHistory,
+        activeHistoryIndex,
+        canUndo,
+        canRedo,
+        showToast,
+        defaultAdjustments,
+      }}
+    >
       {children}
     </EditorContext.Provider>
   );
@@ -265,6 +537,6 @@ export function EditorProvider({ children }) {
 
 export function useEditor() {
   const ctx = useContext(EditorContext);
-  if (!ctx) throw new Error('useEditor must be inside EditorProvider');
+  if (!ctx) throw new Error("useEditor must be inside EditorProvider");
   return ctx;
 }

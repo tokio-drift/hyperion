@@ -94,7 +94,6 @@ function applyBlacks(data, v) {
   }
 }
 
-// ... keep existing rotatePixels & cropPixels ...
 function rotatePixels(data, width, height, direction) {
   const result = new Uint8ClampedArray(width * height * 4);
   const newW = height;
@@ -134,7 +133,8 @@ self.onmessage = function (e) {
 
   try {
     if (msg.type === 'PROCESS') {
-      const { id, pixelData, width, height, adjustments } = msg;
+      // FIX: Ensure we receive masks from EditorCanvas!
+      const { id, pixelData, width, height, adjustments, masks } = msg;
       const buffer = new Uint8ClampedArray(pixelData);
 
       const { 
@@ -143,6 +143,7 @@ self.onmessage = function (e) {
         temperature=0, tint=0, hue=0, saturation=0, vibrance=0
       } = adjustments;
 
+      // --- PHASE A: Global Adjustments ---
       applyExposure(buffer, exposure);
       applyBrightness(buffer, brightness);
       applyContrast(buffer, contrast);
@@ -151,10 +152,54 @@ self.onmessage = function (e) {
       applyWhites(buffer, whites);
       applyBlacks(buffer, blacks);
       
-      // Increment 2 pipeline
       applyTemperature(buffer, temperature);
       applyTint(buffer, tint);
       applyColourGroup(buffer, hue, saturation, vibrance);
+
+      // --- PHASE B: Mask Blending ---
+      if (masks && masks.length > 0) {
+        for (const mask of masks) {
+          if (!mask.isDirty && !mask.inverted) continue; 
+          
+          // 1. Create a scratch copy
+          const scratchBuffer = new Uint8ClampedArray(buffer);
+          
+          // 2. Apply local adjustments to the scratch layer
+          const mAdj = mask.adjustments;
+          applyExposure(scratchBuffer, mAdj.exposure);
+          applyBrightness(scratchBuffer, mAdj.brightness);
+          applyContrast(scratchBuffer, mAdj.contrast);
+          applyHighlights(scratchBuffer, mAdj.highlights);
+          applyShadows(scratchBuffer, mAdj.shadows);
+          applyWhites(scratchBuffer, mAdj.whites);
+          applyBlacks(scratchBuffer, mAdj.blacks);
+          applyTemperature(scratchBuffer, mAdj.temperature);
+          applyTint(scratchBuffer, mAdj.tint);
+          applyColourGroup(scratchBuffer, mAdj.hue, mAdj.saturation, mAdj.vibrance);
+
+          // 3. Blend based on mask alpha
+          const maskData = mask.maskData; 
+          
+          for (let i = 0; i < buffer.length; i += 4) {
+            const pixelIdx = i / 4;
+            let maskVal = maskData[pixelIdx];
+            if (mask.inverted) maskVal = 255 - maskVal;
+
+            if (maskVal === 0) continue; // Skip unpainted pixels
+
+            if (maskVal === 255) {
+              buffer[i]   = scratchBuffer[i];
+              buffer[i+1] = scratchBuffer[i+1];
+              buffer[i+2] = scratchBuffer[i+2];
+            } else {
+              const t = maskVal / 255;
+              buffer[i]   = Math.round(buffer[i]   + (scratchBuffer[i]   - buffer[i])   * t);
+              buffer[i+1] = Math.round(buffer[i+1] + (scratchBuffer[i+1] - buffer[i+1]) * t);
+              buffer[i+2] = Math.round(buffer[i+2] + (scratchBuffer[i+2] - buffer[i+2]) * t);
+            }
+          }
+        }
+      }
 
       self.postMessage(
         { type: 'DONE', id, pixelData: buffer.buffer, width, height },

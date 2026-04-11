@@ -7,6 +7,8 @@ import React, {
 } from "react";
 import { useEditor } from "../../context/EditorContext";
 import UploadZone from "../upload/UploadZone";
+import MaskCanvas from "./MaskCanvas";
+import { paintStroke } from "../../utils/maskUtils";
 
 function debounce(fn, ms) {
   let t;
@@ -39,9 +41,21 @@ export default function EditorCanvas() {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef(null);
-
-  // --- NEW: Crop Drag State ---
   const [cropDrag, setCropDrag] = useState(null);
+
+  // --- Mask State ---
+  const strokeAccumulator = useRef(null);
+  const activeMaskRef = useRef(null);
+
+  useEffect(() => {
+    if (activeImage?.activeMaskId) {
+      activeMaskRef.current = activeImage.masks.find(
+        (m) => m.id === activeImage.activeMaskId,
+      );
+    } else {
+      activeMaskRef.current = null;
+    }
+  }, [activeImage]);
 
   // Helper: Computes the current scaling and offset in CSS pixels
   const getTransform = useCallback(() => {
@@ -64,9 +78,79 @@ export default function EditorCanvas() {
     const css_oy = (cssH - iH * cssScale) / 2 + pan.y;
 
     return { iW, iH, cssScale, css_ox, css_oy };
-  }, [activeImage, processedRef, compareMode, zoom, pan]);
+  }, [activeImage, compareMode, zoom, pan]);
 
-  // Handle Canvas Resizing
+  // --- Mask Callbacks ---
+  const handleStrokeStart = useCallback(
+    (ix, iy) => {
+      if (!activeMaskRef.current) return;
+      // Clone the current mask data into the accumulator for this continuous stroke
+      strokeAccumulator.current = new Uint8Array(
+        activeMaskRef.current.maskData,
+      );
+      paintStroke(
+        strokeAccumulator.current,
+        activeImage.width,
+        activeImage.height,
+        ix,
+        iy,
+        state.brushSettings,
+      );
+      // Force a re-render of MaskCanvas immediately
+      dispatch({
+        type: "UPDATE_MASK_DATA",
+        payload: {
+          imageId: activeImage.id,
+          maskId: activeMaskRef.current.id,
+          newMaskData: strokeAccumulator.current,
+          isDirty: true,
+        },
+      });
+    },
+    [activeImage, state.brushSettings, dispatch],
+  );
+
+  const handleStrokeMove = useCallback(
+    (ix, iy) => {
+      if (!strokeAccumulator.current || !activeMaskRef.current) return;
+      const changed = paintStroke(
+        strokeAccumulator.current,
+        activeImage.width,
+        activeImage.height,
+        ix,
+        iy,
+        state.brushSettings,
+      );
+      if (changed) {
+        // Throttled by MaskCanvas rAF, but updating state ensures overlay catches up
+        dispatch({
+          type: "UPDATE_MASK_DATA",
+          payload: {
+            imageId: activeImage.id,
+            maskId: activeMaskRef.current.id,
+            newMaskData: strokeAccumulator.current,
+            isDirty: true,
+          },
+        });
+      }
+    },
+    [activeImage, state.brushSettings, dispatch],
+  );
+
+  const handleStrokeEnd = useCallback(() => {
+    strokeAccumulator.current = null;
+    // Push history once the mouse is released
+    if (activeMaskRef.current) {
+      dispatch({
+        type: "PUSH_HISTORY",
+        payload: {
+          imageId: activeImage.id,
+          label: `Brush stroke (${state.brushSettings.tool})`,
+        },
+      });
+    }
+  }, [activeImage, state.brushSettings.tool, dispatch]);
+
   // Handle Canvas Resizing
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -84,8 +168,6 @@ export default function EditorCanvas() {
     });
     ro.observe(container);
     return () => ro.disconnect();
-
-    // FIX: Add activeImage here so the observer attaches AFTER the canvas is rendered!
   }, [activeImage]);
 
   // Web Worker Setup
@@ -172,7 +254,7 @@ export default function EditorCanvas() {
     ctx.restore();
 
     // Draw Crop Overlay
-if (activeCrop?.active) {
+    if (activeCrop?.active) {
       const cx = Math.round(ox + activeCrop.x * cssScale * dpr);
       const cy = Math.round(oy + activeCrop.y * cssScale * dpr);
       const cw = Math.round(activeCrop.width * cssScale * dpr);
@@ -225,7 +307,7 @@ if (activeCrop?.active) {
 
   const debouncedProcess = useMemo(
     () =>
-      debounce((orig, adj) => {
+      debounce((orig, adj, masks) => {
         if (!orig) return;
         const buf = new Uint8ClampedArray(orig.data).buffer;
         const msg = {
@@ -235,6 +317,7 @@ if (activeCrop?.active) {
           width: orig.width,
           height: orig.height,
           adjustments: adj,
+          masks: masks, // Pass masks down to the Web Worker
         };
         if (busyRef.current) pendingRef.current = msg;
         else sendToWorker(msg);
@@ -249,10 +332,16 @@ if (activeCrop?.active) {
       if (c) c.getContext("2d").clearRect(0, 0, c.width, c.height);
       return;
     }
-    processedRef.current = activeImage.originalData;
+    if (!processedRef.current || processedRef.current.width !== activeImage.width) {
+      processedRef.current = activeImage.originalData;
+    }
     draw();
-    debouncedProcess(activeImage.originalData, activeAdjustments);
-  }, [activeImage, activeAdjustments]);
+    debouncedProcess(
+      activeImage.originalData,
+      activeAdjustments,
+      activeImage.masks,
+    );
+  }, [activeImage, activeAdjustments, debouncedProcess]);
 
   useEffect(() => {
     draw();
@@ -262,6 +351,7 @@ if (activeCrop?.active) {
     setZoom(1);
     setPan({ x: 0, y: 0 });
   }, []);
+  
   useEffect(() => {
     window.__hyperionFitToScreen = fitToScreen;
     return () => delete window.__hyperionFitToScreen;
@@ -450,25 +540,49 @@ if (activeCrop?.active) {
     >
       <canvas
         ref={canvasRef}
-        className="absolute inset-0"
-        style={{ display: "block", width: "100%", height: "100%" }}
+        className="absolute inset-0 z-10"
+        style={{
+          display: "block",
+          width: "100%",
+          height: "100%",
+          // Ignore mouse events on the main canvas if the brush mask mode is active
+          pointerEvents: state.maskMode ? "none" : "auto", 
+        }}
       />
       <UploadZone overlayMode />
 
       {compareMode && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 pointer-events-none">
           <span className="compare-badge badge px-3 py-1 bg-gray-900/80 text-gray-300 border border-gray-600 rounded backdrop-blur-sm">
             before
           </span>
         </div>
       )}
-      <div className="absolute bottom-3 left-3 z-10 pointer-events-none">
+
+      {/* --- Mount MaskCanvas --- */}
+      {activeImage && (
+        <MaskCanvas
+          maskData={activeMaskRef.current?.maskData}
+          inverted={activeMaskRef.current?.inverted}
+          width={activeImage.width}
+          height={activeImage.height}
+          imageRect={getTransform()}
+          showOverlay={state.showMaskOverlay && activeMaskRef.current?.visible}
+          brushSettings={state.brushSettings}
+          maskMode={state.maskMode}
+          onStrokeStart={handleStrokeStart}
+          onStrokeMove={handleStrokeMove}
+          onStrokeEnd={handleStrokeEnd}
+        />
+      )}
+
+      <div className="absolute bottom-3 left-3 z-40 pointer-events-none">
         <span className="text-xs font-mono text-gray-600 bg-black/30 px-2 py-0.5 rounded">
           {Math.round(zoom * 100)}%
         </span>
       </div>
       {zoom === 1 && (
-        <div className="absolute bottom-3 right-3 z-10 pointer-events-none">
+        <div className="absolute bottom-3 right-3 z-40 pointer-events-none">
           <span className="text-xs text-gray-700">Alt+drag to pan</span>
         </div>
       )}

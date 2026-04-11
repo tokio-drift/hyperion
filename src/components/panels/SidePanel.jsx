@@ -2,12 +2,14 @@ import React from 'react';
 import { useEditor } from '../../context/EditorContext';
 import TonalPanel from './TonalPanel';
 import ColourPanel from './ColourPanel';
+import MaskPanel from './MaskPanel';
 import DimensionPanel from './DimensionPanel';
 import HistoryPanel from './HistoryPanel';
 
 const TABS = [
   { id: 'tonal',     label: 'Light' },
-  { id: 'colour',    label: 'Colour' }, // --- Increment 2 ---
+  { id: 'colour',    label: 'Colour' }, 
+  { id: 'mask',      label: 'Mask' }, 
   { id: 'dimension', label: 'Crop' },
   { id: 'history',   label: 'History' },
 ];
@@ -15,6 +17,21 @@ const TABS = [
 export default function SidePanel() {
   const { state, dispatch } = useEditor();
   const { activePanelTab, sidePanelOpen } = state.ui;
+
+  // --- NEW: Automatically clean up canvas modes when switching tabs ---
+  const handleTabChange = (tabId) => {
+    dispatch({ type: 'SET_PANEL_TAB', payload: tabId });
+    
+    // Auto-cancel crop if we navigate away from the Crop tab
+    if (tabId !== 'dimension' && state.activeImageId) {
+      dispatch({ type: 'CANCEL_CROP', payload: { imageId: state.activeImageId } });
+    }
+    
+    // Auto-exit mask drawing mode if we navigate away from the Mask tab
+    if (tabId !== 'mask') {
+      dispatch({ type: 'SET_MASK_MODE', payload: false });
+    }
+  };
 
   return (
     <aside
@@ -32,7 +49,7 @@ export default function SidePanel() {
             {TABS.map(tab => (
               <button
                 key={tab.id}
-                onClick={() => dispatch({ type: 'SET_PANEL_TAB', payload: tab.id })}
+                onClick={() => handleTabChange(tab.id)}
                 className={`
                   flex-1 py-2.5 text-xs font-medium transition-colors
                   ${activePanelTab === tab.id
@@ -50,6 +67,7 @@ export default function SidePanel() {
           <div className="flex-1 overflow-hidden flex flex-col">
             {activePanelTab === 'tonal'     && <TonalPanel />}
             {activePanelTab === 'colour'    && <ColourPanel />}
+            {activePanelTab === 'mask'      && <MaskPanel />}
             {activePanelTab === 'dimension' && <DimensionPanel />}
             {activePanelTab === 'history'   && <HistoryPanel />}
           </div>
