@@ -1,0 +1,33 @@
+export const defaultAdjustments = {
+  exposure: 0,
+  contrast: 0,
+  highlights: 0,
+  shadows: 0,
+  whites: 0,
+  blacks: 0,
+  brightness: 0,
+  hue: 0,
+  saturation: 0,
+  vibrance: 0,
+  temperature: 0,
+  tint: 0,
+};
+
+export const initialState = {
+  images: [],
+  activeImageId: null,
+  adjustments: {},
+  crop: {},
+  history: {},
+  historyIndex: {},
+  compareMode: false,
+  ui: {
+    sidePanelOpen: true,
+    activePanelTab: "tonal",
+    exportModalOpen: false,
+  },
+  toasts: [],
+  maskMode: false,
+  brushSettings: { size: 40, feather: 20, opacity: 100, tool: "paint" },
+  showMaskOverlay: true,
+};
