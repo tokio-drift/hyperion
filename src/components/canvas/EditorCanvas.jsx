@@ -23,6 +23,82 @@ const WORKER_URL = new URL(
   import.meta.url,
 );
 
+// ─── Drawing Utilities ───────────────────────────────────────────────
+/**
+ * Draw checkerboard background
+ */
+function drawCheckerboard(ctx, ox, oy, dW, dH, dpr) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(ox, oy, dW, dH);
+  ctx.clip();
+  const size = Math.round(10 * dpr);
+  const cols = Math.ceil(dW / size) + 1;
+  const rows = Math.ceil(dH / size) + 1;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      ctx.fillStyle = (r + c) % 2 === 0 ? "#2a2a2a" : "#1e1e1e";
+      ctx.fillRect(ox + c * size, oy + r * size, size, size);
+    }
+  }
+  ctx.restore();
+}
+
+/**
+ * Draw image with smoothing based on zoom level
+ */
+function drawImage(ctx, offscreenCanvas, ox, oy, dW, dH, cssScale) {
+  ctx.save();
+  ctx.imageSmoothingEnabled = cssScale < 1;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(offscreenCanvas, ox, oy, dW, dH);
+  ctx.restore();
+}
+
+/**
+ * Draw crop overlay (shaded area outside crop box)
+ */
+function drawCropOverlay(ctx, ox, oy, dW, dH, cx, cy, cw, ch) {
+  ctx.save();
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  ctx.fillRect(ox, oy, dW, cy - oy); // top
+  ctx.fillRect(ox, cy + ch, dW, oy + dH - (cy + ch)); // bottom
+  ctx.fillRect(ox, cy, cx - ox, ch); // left
+  ctx.fillRect(cx + cw, cy, ox + dW - (cx + cw), ch); // right
+  ctx.restore();
+}
+
+/**
+ * Draw crop grid lines and handles
+ */
+function drawCropHandles(ctx, cx, cy, cw, ch, dpr) {
+  ctx.save();
+  ctx.strokeStyle = "rgba(255,255,255,0.85)";
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(cx, cy, cw, ch);
+  ctx.strokeStyle = "rgba(255,255,255,0.2)";
+  ctx.lineWidth = 0.5;
+  for (let i = 1; i < 3; i++) {
+    ctx.beginPath();
+    ctx.moveTo(cx + (cw * i) / 3, cy);
+    ctx.lineTo(cx + (cw * i) / 3, cy + ch);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx, cy + (ch * i) / 3);
+    ctx.lineTo(cx + cw, cy + (ch * i) / 3);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  ctx.fillStyle = "white";
+  const hs = 7 * dpr;
+  [[cx, cy], [cx + cw - hs, cy], [cx, cy + ch - hs], [cx + cw - hs, cy + ch - hs]].forEach(
+    ([x, y]) => {
+      ctx.fillRect(x, y, hs, hs);
+    },
+  );
+}
+
 export default function EditorCanvas() {
   const { state, dispatch, activeImage, activeAdjustments, activeCrop } =
     useEditor();
@@ -81,10 +157,13 @@ export default function EditorCanvas() {
   }, [activeImage, compareMode, zoom, pan]);
 
   // --- Mask Callbacks ---
+  // Throttle mask state dispatches during painting — MaskCanvas handles its own
+  // rAF loop for the visual overlay, so we only need to sync React state ~20fps
+  const lastMaskDispatchRef = useRef(0);
+
   const handleStrokeStart = useCallback(
     (ix, iy) => {
       if (!activeMaskRef.current) return;
-      // Clone the current mask data into the accumulator for this continuous stroke
       strokeAccumulator.current = new Uint8Array(
         activeMaskRef.current.maskData,
       );
@@ -96,7 +175,7 @@ export default function EditorCanvas() {
         iy,
         state.brushSettings,
       );
-      // Force a re-render of MaskCanvas immediately
+      lastMaskDispatchRef.current = Date.now();
       dispatch({
         type: "UPDATE_MASK_DATA",
         payload: {
@@ -122,25 +201,37 @@ export default function EditorCanvas() {
         state.brushSettings,
       );
       if (changed) {
-        // Throttled by MaskCanvas rAF, but updating state ensures overlay catches up
-        dispatch({
-          type: "UPDATE_MASK_DATA",
-          payload: {
-            imageId: activeImage.id,
-            maskId: activeMaskRef.current.id,
-            newMaskData: strokeAccumulator.current,
-            isDirty: true,
-          },
-        });
+        // Only dispatch to React state every 50ms — MaskCanvas rAF handles visual updates
+        const now = Date.now();
+        if (now - lastMaskDispatchRef.current >= 50) {
+          lastMaskDispatchRef.current = now;
+          dispatch({
+            type: "UPDATE_MASK_DATA",
+            payload: {
+              imageId: activeImage.id,
+              maskId: activeMaskRef.current.id,
+              newMaskData: strokeAccumulator.current,
+              isDirty: true,
+            },
+          });
+        }
       }
     },
     [activeImage, state.brushSettings, dispatch],
   );
 
   const handleStrokeEnd = useCallback(() => {
-    strokeAccumulator.current = null;
-    // Push history once the mouse is released
-    if (activeMaskRef.current) {
+    // Always do a final dispatch to ensure React state has the completed stroke
+    if (activeMaskRef.current && strokeAccumulator.current) {
+      dispatch({
+        type: "UPDATE_MASK_DATA",
+        payload: {
+          imageId: activeImage.id,
+          maskId: activeMaskRef.current.id,
+          newMaskData: strokeAccumulator.current,
+          isDirty: true,
+        },
+      });
       dispatch({
         type: "PUSH_HISTORY",
         payload: {
@@ -149,6 +240,7 @@ export default function EditorCanvas() {
         },
       });
     }
+    strokeAccumulator.current = null;
   }, [activeImage, state.brushSettings.tool, dispatch]);
 
   // Handle Canvas Resizing
@@ -214,21 +306,9 @@ export default function EditorCanvas() {
     const dH = Math.round(iH * cssScale * dpr);
     const ox = Math.round(css_ox * dpr);
     const oy = Math.round(css_oy * dpr);
-    const size = Math.round(10 * dpr);
 
-    // Draw Checkerboard
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(ox, oy, dW, dH);
-    ctx.clip();
-    const cols = Math.ceil(dW / size) + 1;
-    const rows = Math.ceil(dH / size) + 1;
-    for (let r = 0; r < rows; r++)
-      for (let c = 0; c < cols; c++) {
-        ctx.fillStyle = (r + c) % 2 === 0 ? "#2a2a2a" : "#1e1e1e";
-        ctx.fillRect(ox + c * size, oy + r * size, size, size);
-      }
-    ctx.restore();
+    // Draw background checkerboard
+    drawCheckerboard(ctx, ox, oy, dW, dH, dpr);
 
     // Cache temporary canvas (Fixes memory leaks)
     if (!offscreenRef.current)
@@ -246,56 +326,18 @@ export default function EditorCanvas() {
       lastDataRef.current = imageData;
     }
 
-    // Draw Image (Turn off smoothing if 100% or larger to keep pixels crisp)
-    ctx.save();
-    ctx.imageSmoothingEnabled = cssScale < 1;
-    ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(tmp, ox, oy, dW, dH);
-    ctx.restore();
+    // Draw the image
+    drawImage(ctx, tmp, ox, oy, dW, dH, cssScale);
 
-    // Draw Crop Overlay
+    // Draw crop overlay if active
     if (activeCrop?.active) {
       const cx = Math.round(ox + activeCrop.x * cssScale * dpr);
       const cy = Math.round(oy + activeCrop.y * cssScale * dpr);
       const cw = Math.round(activeCrop.width * cssScale * dpr);
       const ch = Math.round(activeCrop.height * cssScale * dpr);
 
-      ctx.save();
-      ctx.fillStyle = "rgba(0,0,0,0.55)";
-      ctx.fillRect(ox, oy, dW, cy - oy); // top
-      ctx.fillRect(ox, cy + ch, dW, oy + dH - (cy + ch)); // bottom
-      ctx.fillRect(ox, cy, cx - ox, ch); // left
-      ctx.fillRect(cx + cw, cy, ox + dW - (cx + cw), ch); // right
-      ctx.restore();
-
-      ctx.save();
-      ctx.strokeStyle = "rgba(255,255,255,0.85)";
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(cx, cy, cw, ch);
-      ctx.strokeStyle = "rgba(255,255,255,0.2)";
-      ctx.lineWidth = 0.5;
-      for (let i = 1; i < 3; i++) {
-        ctx.beginPath();
-        ctx.moveTo(cx + (cw * i) / 3, cy);
-        ctx.lineTo(cx + (cw * i) / 3, cy + ch);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(cx, cy + (ch * i) / 3);
-        ctx.lineTo(cx + cw, cy + (ch * i) / 3);
-        ctx.stroke();
-      }
-      ctx.restore();
-
-      ctx.fillStyle = "white";
-      const hs = 7 * dpr;
-      [
-        [cx, cy],
-        [cx + cw - hs, cy],
-        [cx, cy + ch - hs],
-        [cx + cw - hs, cy + ch - hs],
-      ].forEach(([x, y]) => {
-        ctx.fillRect(x, y, hs, hs);
-      });
+      drawCropOverlay(ctx, ox, oy, dW, dH, cx, cy, cw, ch);
+      drawCropHandles(ctx, cx, cy, cw, ch, dpr);
     }
   }, [activeImage, compareMode, zoom, pan, activeCrop, getTransform]);
 
@@ -317,35 +359,82 @@ export default function EditorCanvas() {
           width: orig.width,
           height: orig.height,
           adjustments: adj,
-          masks: masks, // Pass masks down to the Web Worker
+          masks: masks,
         };
         if (busyRef.current) pendingRef.current = msg;
         else sendToWorker(msg);
       }, 16),
-    [],
+    [], // eslint-disable-line
   );
+
+  const activeImageIdRef = useRef(null);
+  // Track last-sent adjustment/mask signature to skip redundant worker calls
+  const lastProcessSigRef = useRef(null);
+  // Track dimensions to detect when rotation changes image size
+  const lastImageDimensionsRef = useRef(null);
+  // Track if we need to reprocess after dimension change (smooth transition)
+  const needsReprocessRef = useRef(false);
 
   useEffect(() => {
     if (!activeImage) {
       processedRef.current = null;
+      activeImageIdRef.current = null;
+      lastProcessSigRef.current = null;
+      lastImageDimensionsRef.current = null;
+      needsReprocessRef.current = false;
       const c = canvasRef.current;
       if (c) c.getContext("2d").clearRect(0, 0, c.width, c.height);
       return;
     }
-    if (!processedRef.current || processedRef.current.width !== activeImage.width) {
+    if (activeImageIdRef.current !== activeImage.id) {
+      processedRef.current = null;
+      activeImageIdRef.current = activeImage.id;
+      lastProcessSigRef.current = null;
+      lastImageDimensionsRef.current = null;
+      needsReprocessRef.current = false;
+    }
+    
+    // Detect dimension change (e.g., after rotation)
+    const currentDims = `${activeImage.width}x${activeImage.height}`;
+    const dimChanged = lastImageDimensionsRef.current !== currentDims;
+    if (dimChanged) {
+      lastImageDimensionsRef.current = currentDims;
+      needsReprocessRef.current = true;
+      // Reset signature so we reprocess immediately below (without clearing processedRef visually)
+      lastProcessSigRef.current = null;
+    }
+    
+    if (!processedRef.current) {
       processedRef.current = activeImage.originalData;
     }
-    draw();
-    debouncedProcess(
-      activeImage.originalData,
-      activeAdjustments,
-      activeImage.masks,
-    );
+
+    // Build a cheap signature to skip re-processing if nothing meaningful changed
+    // (e.g. only the mask overlay toggled, not adjustments or mask data)
+    const sig = JSON.stringify(activeAdjustments) +
+      (activeImage.masks?.map(m =>
+        m.id + m.isDirty + m.visible + m.inverted + JSON.stringify(m.adjustments)
+      ).join('|') || '');
+
+    // Process if: signature changed, OR we need to reprocess after dimension change
+    if (sig !== lastProcessSigRef.current || needsReprocessRef.current) {
+      lastProcessSigRef.current = sig;
+      needsReprocessRef.current = false;
+      draw();
+      debouncedProcess(
+        activeImage.originalData,
+        activeAdjustments,
+        activeImage.masks,
+      );
+    } else {
+      // Adjustments unchanged — just redraw canvas (pan/zoom/crop changed)
+      draw();
+    }
   }, [activeImage, activeAdjustments, debouncedProcess]);
 
+  // Redraw canvas whenever compare mode changes
   useEffect(() => {
     draw();
-  }, [draw]);
+  }, [compareMode, draw]);
 
   const fitToScreen = useCallback(() => {
     setZoom(1);
@@ -567,7 +656,7 @@ export default function EditorCanvas() {
           width={activeImage.width}
           height={activeImage.height}
           imageRect={getTransform()}
-          showOverlay={state.showMaskOverlay && activeMaskRef.current?.visible}
+          showOverlay={state.showMaskOverlay && !!activeMaskRef.current && activeMaskRef.current.visible}
           brushSettings={state.brushSettings}
           maskMode={state.maskMode}
           onStrokeStart={handleStrokeStart}

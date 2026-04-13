@@ -15,6 +15,10 @@ export default function DimensionPanel() {
   const [lockAspect, setLockAspect] = useState(true);
   const [resizeError, setResizeError] = useState("");
 
+  // Track whether the last worker job was a rotate or crop (so onResult knows to patch history)
+  const lastJobWasRotate = React.useRef(false);
+  const lastJobWasCrop = React.useRef(false);
+
   const { rotateImage, cropImage } = useImageProcessor({
     onResult: (imageData) => {
       if (!activeImage) return;
@@ -27,6 +31,21 @@ export default function DimensionPanel() {
           height: imageData.height,
         },
       });
+      // Patch the history entry so REDO can restore post-rotation/crop pixel data
+      if (lastJobWasRotate.current) {
+        dispatch({
+          type: "PATCH_HISTORY_IMAGE_DATA",
+          payload: { imageId: activeImage.id, postRotateData: imageData },
+        });
+        lastJobWasRotate.current = false;
+      }
+      if (lastJobWasCrop.current) {
+        dispatch({
+          type: "PATCH_HISTORY_IMAGE_DATA",
+          payload: { imageId: activeImage.id, postCropData: imageData },
+        });
+        lastJobWasCrop.current = false;
+      }
     },
   });
 
@@ -95,8 +114,10 @@ export default function DimensionPanel() {
     const safeW = Math.round(width);
     const safeH = Math.round(height);
 
+    lastJobWasCrop.current = true;
     cropImage(activeImage.originalData, safeX, safeY, safeW, safeH);
-    dispatch({ type: "APPLY_CROP", payload: { imageId: activeImage.id } });
+    // Store pre-crop data so undo/redo works properly
+    dispatch({ type: "APPLY_CROP", payload: { imageId: activeImage.id, preCropData: activeImage.originalData } });
     push("Crop applied");
     setConfirmCrop(false);
   }, [activeImage, activeCrop, cropImage, dispatch, push]);
@@ -105,6 +126,7 @@ export default function DimensionPanel() {
   const rotate = useCallback(
     (direction) => {
       if (!activeImage) return;
+      lastJobWasRotate.current = true;
       rotateImage(activeImage.originalData, direction);
       dispatch({
         type: "ROTATE_IMAGE",
@@ -337,7 +359,7 @@ export default function DimensionPanel() {
       <ConfirmDialog
         open={confirmCrop}
         title="Apply Crop"
-        message="This will permanently crop the image. The original outside the crop area will be lost. You can undo this action."
+        message="This will crop the image to the selected area. You can undo this action at any time."
         confirmLabel="Apply Crop"
         onConfirm={applyCrop}
         onCancel={() => setConfirmCrop(false)}

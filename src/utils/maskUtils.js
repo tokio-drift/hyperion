@@ -62,9 +62,9 @@ export function getMaskPixelValue(maskData, inverted, x, y, width) {
   return inverted ? (255 - raw) : raw;
 }
 
-export function canvasToImageCoords(canvasX, canvasY, imageRect, zoom) {
-  const imageX = (canvasX - imageRect.x) / (imageRect.scale * zoom);
-  const imageY = (canvasY - imageRect.y) / (imageRect.scale * zoom);
+export function canvasToImageCoords(canvasX, canvasY, imageRect) {
+  const imageX = (canvasX - imageRect.css_ox) / imageRect.cssScale;
+  const imageY = (canvasY - imageRect.css_oy) / imageRect.cssScale;
   return {
     x: Math.floor(imageX),
     y: Math.floor(imageY)

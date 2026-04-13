@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { useEditor } from '../../context/EditorContext';
 import Tooltip from '../shared/Tooltip';
 
@@ -43,6 +43,20 @@ function Divider() {
 export default function Toolbar() {
   const { state, dispatch, canUndo, canRedo, activeImage } = useEditor();
   const { compareMode } = state;
+  const isComparePressedRef = useRef(false);
+
+  // Handle document-level mouse events for compare button
+  useEffect(() => {
+    const handleDocumentMouseUp = () => {
+      if (isComparePressedRef.current) {
+        isComparePressedRef.current = false;
+        dispatch({ type: 'TOGGLE_COMPARE', payload: false });
+      }
+    };
+
+    document.addEventListener('mouseup', handleDocumentMouseUp);
+    return () => document.removeEventListener('mouseup', handleDocumentMouseUp);
+  }, [dispatch]);
 
   return (
     <header
@@ -86,9 +100,20 @@ export default function Toolbar() {
 
       {/* Compare (hold) */}
       <TBtn
-        onMouseDown={() => dispatch({ type: 'TOGGLE_COMPARE', payload: true })}
-        onMouseUp={() => dispatch({ type: 'TOGGLE_COMPARE', payload: false })}
-        onMouseLeave={() => dispatch({ type: 'TOGGLE_COMPARE', payload: false })}
+        onMouseDown={() => {
+          isComparePressedRef.current = true;
+          dispatch({ type: 'TOGGLE_COMPARE', payload: true });
+        }}
+        onMouseUp={() => {
+          isComparePressedRef.current = false;
+          dispatch({ type: 'TOGGLE_COMPARE', payload: false });
+        }}
+        onMouseLeave={() => {
+          if (isComparePressedRef.current) {
+            isComparePressedRef.current = false;
+            dispatch({ type: 'TOGGLE_COMPARE', payload: false });
+          }
+        }}
         tooltip="Hold to compare with original (Space)"
         active={compareMode}
       >

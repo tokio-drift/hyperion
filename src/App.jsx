@@ -15,22 +15,26 @@ export default function App() {
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
   useKeyboardShortcuts();
 
-  // ── Auto-save to localStorage ─────────────────────────────────────────────
+  // ── Auto-save to localStorage (debounced — don't stringify on every slider tick) ──
+  const saveTimerRef = useRef(null);
   useEffect(() => {
     if (!state.images.length) return;
-    try {
-      const session = {
-        adjustments: state.adjustments,
-        history: state.history,
-        historyIndex: state.historyIndex,
-        activeImageId: state.activeImageId,
-        // Store image metadata (not pixel data — images must be re-uploaded)
-        imageMeta: state.images.map(img => ({ id: img.id, name: img.name, width: img.width, height: img.height })),
-      };
-      localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-    } catch {
-      // localStorage may be unavailable in some contexts
-    }
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      try {
+        const session = {
+          adjustments: state.adjustments,
+          history: state.history,
+          historyIndex: state.historyIndex,
+          activeImageId: state.activeImageId,
+          imageMeta: state.images.map(img => ({ id: img.id, name: img.name, width: img.width, height: img.height })),
+        };
+        localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      } catch {
+        // localStorage may be unavailable in some contexts
+      }
+    }, 1000); // Only save after 1s of inactivity
+    return () => clearTimeout(saveTimerRef.current);
   }, [state.adjustments, state.history, state.historyIndex, state.activeImageId]);
 
   // ── Restore session on first load ─────────────────────────────────────────

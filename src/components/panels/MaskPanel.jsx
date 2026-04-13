@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { useEditor } from '../../context/EditorContext';
 import { useHistory } from '../../hooks/useHistory';
 import Slider from '../shared/Slider';
@@ -33,13 +33,20 @@ export default function MaskPanel() {
   const activeMask = masks.find(m => m.id === activeMaskId);
   const { maskMode, brushSettings, showMaskOverlay } = state;
 
+  // Debounce history push so dragging sliders doesn't spam entries
+  const pushTimerRef = useRef(null);
+  const debouncedPush = useCallback((label) => {
+    clearTimeout(pushTimerRef.current);
+    pushTimerRef.current = setTimeout(() => push(label), 600);
+  }, [push]);
+
   const handleAddMask = () => dispatch({ type: 'ADD_MASK', payload: { imageId: activeImage.id } });
   
   const handleBrushChange = (key, value) => dispatch({ type: 'UPDATE_BRUSH', payload: { [key]: value } });
 
   const handleAdjChange = (key, value) => {
     dispatch({ type: 'UPDATE_MASK_ADJUSTMENT', payload: { imageId: activeImage.id, maskId: activeMaskId, key, value } });
-    push(`Mask: ${key} ${value}`); // Debounce in prod, simplified here
+    debouncedPush(`Mask: ${key}`);
   };
 
   return (

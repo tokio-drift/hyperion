@@ -102,7 +102,7 @@ export default function MaskCanvas({
     const rect = canvasRef.current.getBoundingClientRect();
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
-    const imgCoords = canvasToImageCoords(mx, my, imageRect, 1);
+    const imgCoords = canvasToImageCoords(mx, my, imageRect);
     onStrokeStart(imgCoords.x, imgCoords.y);
   };
 
@@ -114,7 +114,7 @@ export default function MaskCanvas({
     cursorRef.current = { x: mx, y: my };
 
     if (isPainting.current) {
-      const imgCoords = canvasToImageCoords(mx, my, imageRect, 1);
+      const imgCoords = canvasToImageCoords(mx, my, imageRect);
       onStrokeMove(imgCoords.x, imgCoords.y);
     }
     requestAnimationFrame(renderFrame); // Update cursor position

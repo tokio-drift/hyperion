@@ -41,12 +41,13 @@ const initialState = {
 
 const MAX_HISTORY = 10;
 
-function makeEntry(label, adjustments, crop) {
+function makeEntry(label, adjustments, crop, originalData) {
   return {
     timestamp: Date.now(),
     label,
     adjustments: { ...adjustments },
     crop: crop ? { ...crop } : null,
+    originalData: originalData || null,
   };
 }
 
@@ -169,8 +170,20 @@ function editorReducer(state, action) {
       if (idx <= 0) return state;
       const prevIdx = idx - 1;
       const entry = state.history[imageId][prevIdx];
+      // If the entry we're going back to has a stored originalData, restore it
+      // (this happens when undoing past a rotate)
+      const imageUpdate = entry.originalData
+        ? {
+            images: state.images.map((img) =>
+              img.id === imageId
+                ? { ...img, originalData: entry.originalData, width: entry.originalData.width, height: entry.originalData.height }
+                : img,
+            ),
+          }
+        : {};
       return {
         ...state,
+        ...imageUpdate,
         adjustments: {
           ...state.adjustments,
           [imageId]: { ...entry.adjustments },
@@ -189,8 +202,20 @@ function editorReducer(state, action) {
       if (idx >= entries.length - 1) return state;
       const nextIdx = idx + 1;
       const entry = entries[nextIdx];
+      // If redoing into a rotate or crop entry, restore the post-operation pixel data
+      const postOperationData = entry.postRotateData || entry.postCropData;
+      const imageUpdate = postOperationData
+        ? {
+            images: state.images.map((img) =>
+              img.id === imageId
+                ? { ...img, originalData: postOperationData, width: postOperationData.width, height: postOperationData.height }
+                : img,
+            ),
+          }
+        : {};
       return {
         ...state,
+        ...imageUpdate,
         adjustments: {
           ...state.adjustments,
           [imageId]: { ...entry.adjustments },
@@ -241,12 +266,13 @@ function editorReducer(state, action) {
     }
 
     case "APPLY_CROP": {
-      const { imageId } = action.payload;
+      const { imageId, preCropData } = action.payload;
       const crop = state.crop[imageId];
       const entry = makeEntry(
         "Crop applied",
         state.adjustments[imageId] || defaultAdjustments,
         crop,
+        preCropData || null,
       );
       const { entries, index } = pushHistory(
         state.history[imageId] || [],
@@ -275,10 +301,13 @@ function editorReducer(state, action) {
     case "ROTATE_IMAGE": {
       const { imageId, direction } = action.payload;
       const label = direction === "cw" ? "Rotate 90° CW" : "Rotate 90° CCW";
+      // Capture the pre-rotation originalData so undo can restore it
+      const preRotateImage = state.images.find((img) => img.id === imageId);
       const entry = makeEntry(
         label,
         state.adjustments[imageId] || defaultAdjustments,
         state.crop[imageId],
+        preRotateImage?.originalData || null,
       );
       const { entries, index } = pushHistory(
         state.history[imageId] || [],
@@ -289,6 +318,28 @@ function editorReducer(state, action) {
         ...state,
         history: { ...state.history, [imageId]: entries },
         historyIndex: { ...state.historyIndex, [imageId]: index },
+      };
+    }
+
+    case "PATCH_HISTORY_IMAGE_DATA": {
+      // After a rotate/crop completes, we patch the latest history entry with the
+      // new (post-operation) pixel data so that REDO can restore it correctly.
+      const { imageId, postRotateData, postCropData } = action.payload;
+      const entries = state.history[imageId] || [];
+      const idx = state.historyIndex[imageId] ?? -1;
+      if (idx < 0 || idx >= entries.length) return state;
+      const updatedEntries = entries.map((entry, i) =>
+        i === idx 
+          ? { 
+              ...entry, 
+              ...(postRotateData ? { postRotateData } : {}),
+              ...(postCropData ? { postCropData } : {}),
+            } 
+          : entry,
+      );
+      return {
+        ...state,
+        history: { ...state.history, [imageId]: updatedEntries },
       };
     }
 

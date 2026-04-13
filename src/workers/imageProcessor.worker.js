@@ -159,13 +159,22 @@ self.onmessage = function (e) {
       // --- PHASE B: Mask Blending ---
       if (masks && masks.length > 0) {
         for (const mask of masks) {
-          if (!mask.isDirty && !mask.inverted) continue; 
+          // Skip invisible masks
+          if (!mask.visible) continue;
+
+          // Check if this mask has any non-zero adjustments to apply
+          const mAdj = mask.adjustments;
+          const hasAdjustments = Object.values(mAdj).some(v => v !== 0);
+          if (!hasAdjustments) continue;
+
+          // Check if any pixel in the mask is actually painted
+          const hasPaintedPixels = mask.maskData.some(v => v > 0);
+          if (!hasPaintedPixels && !mask.inverted) continue;
           
           // 1. Create a scratch copy
           const scratchBuffer = new Uint8ClampedArray(buffer);
           
           // 2. Apply local adjustments to the scratch layer
-          const mAdj = mask.adjustments;
           applyExposure(scratchBuffer, mAdj.exposure);
           applyBrightness(scratchBuffer, mAdj.brightness);
           applyContrast(scratchBuffer, mAdj.contrast);
