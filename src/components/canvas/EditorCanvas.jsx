@@ -18,6 +18,7 @@ export default function EditorCanvas() {
     activeImage,
     activeAdjustments,
     activeCrop,
+    maskMode: state.maskMode,
     compareMode,
     zoom,
     pan,
@@ -92,6 +93,7 @@ export default function EditorCanvas() {
 
       <MaskCanvas
         maskData={activeMaskRef.current?.maskData}
+        maskRevision={activeMaskRef.current?.revision || 0}
         inverted={activeMaskRef.current?.inverted}
         width={activeImage.width}
         height={activeImage.height}

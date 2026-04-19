@@ -12,10 +12,10 @@ export function reduceMaskActions(state, action) {
             id: `mask-${Date.now()}`,
             label: `Mask ${img.masks.length + 1}`,
             maskData: new Uint8Array(img.width * img.height),
+            revision: 0,
             adjustments: { ...defaultAdjustments },
             inverted: false,
             visible: true,
-            isDirty: false,
           };
           return {
             ...img,
@@ -54,7 +54,7 @@ export function reduceMaskActions(state, action) {
     }
 
     case "UPDATE_MASK_DATA": {
-      const { imageId, maskId, newMaskData, isDirty } = action.payload;
+      const { imageId, maskId, newMaskData } = action.payload;
       return {
         ...state,
         images: state.images.map((img) => {
@@ -62,7 +62,13 @@ export function reduceMaskActions(state, action) {
           return {
             ...img,
             masks: img.masks.map((m) =>
-              m.id === maskId ? { ...m, maskData: newMaskData, isDirty } : m,
+              m.id === maskId
+                ? {
+                    ...m,
+                    maskData: newMaskData,
+                    revision: (m.revision || 0) + 1,
+                  }
+                : m,
             ),
           };
         }),

@@ -1,10 +1,11 @@
 import { useRef, useEffect, useCallback } from "react";
-import { paintStroke } from "../utils/maskUtils";
+import { paintStroke, paintStrokeInterpolated } from "../utils/maskUtils";
 
 export function useMaskStrokeHandlers({ activeImage, brushSettings, dispatch }) {
   const strokeAccumulator = useRef(null);
   const activeMaskRef = useRef(null);
   const lastMaskDispatchRef = useRef(0);
+  const lastPointRef = useRef(null);
 
   useEffect(() => {
     if (activeImage?.activeMaskId) {
@@ -13,8 +14,23 @@ export function useMaskStrokeHandlers({ activeImage, brushSettings, dispatch }) 
       );
     } else {
       activeMaskRef.current = null;
+      strokeAccumulator.current = null;
+      lastPointRef.current = null;
     }
   }, [activeImage]);
+
+  const dispatchMaskUpdate = useCallback(() => {
+    if (!activeImage || !activeMaskRef.current || !strokeAccumulator.current) return;
+
+    dispatch({
+      type: "UPDATE_MASK_DATA",
+      payload: {
+        imageId: activeImage.id,
+        maskId: activeMaskRef.current.id,
+        newMaskData: strokeAccumulator.current,
+      },
+    });
+  }, [activeImage, dispatch]);
 
   const handleStrokeStart = useCallback(
     (ix, iy) => {
@@ -28,18 +44,11 @@ export function useMaskStrokeHandlers({ activeImage, brushSettings, dispatch }) 
         iy,
         brushSettings,
       );
-      lastMaskDispatchRef.current = Date.now();
-      dispatch({
-        type: "UPDATE_MASK_DATA",
-        payload: {
-          imageId: activeImage.id,
-          maskId: activeMaskRef.current.id,
-          newMaskData: strokeAccumulator.current,
-          isDirty: true,
-        },
-      });
+      lastPointRef.current = { x: ix, y: iy };
+      lastMaskDispatchRef.current = performance.now();
+      dispatchMaskUpdate();
     },
-    [activeImage, brushSettings, dispatch],
+    [activeImage, brushSettings, dispatchMaskUpdate],
   );
 
   const handleStrokeMove = useCallback(
@@ -47,48 +56,37 @@ export function useMaskStrokeHandlers({ activeImage, brushSettings, dispatch }) 
       if (!strokeAccumulator.current || !activeMaskRef.current || !activeImage) {
         return;
       }
-      const changed = paintStroke(
+      const lastPoint = lastPointRef.current || { x: ix, y: iy };
+      const changed = paintStrokeInterpolated(
         strokeAccumulator.current,
         activeImage.width,
         activeImage.height,
+        lastPoint.x,
+        lastPoint.y,
         ix,
         iy,
         brushSettings,
       );
+      lastPointRef.current = { x: ix, y: iy };
       if (!changed) return;
 
-      const now = Date.now();
-      if (now - lastMaskDispatchRef.current >= 50) {
+      const now = performance.now();
+      if (now - lastMaskDispatchRef.current >= 16) {
         lastMaskDispatchRef.current = now;
-        dispatch({
-          type: "UPDATE_MASK_DATA",
-          payload: {
-            imageId: activeImage.id,
-            maskId: activeMaskRef.current.id,
-            newMaskData: strokeAccumulator.current,
-            isDirty: true,
-          },
-        });
+        dispatchMaskUpdate();
       }
     },
-    [activeImage, brushSettings, dispatch],
+    [activeImage, brushSettings, dispatchMaskUpdate],
   );
 
   const handleStrokeEnd = useCallback(() => {
     if (!activeImage || !activeMaskRef.current || !strokeAccumulator.current) {
       strokeAccumulator.current = null;
+      lastPointRef.current = null;
       return;
     }
 
-    dispatch({
-      type: "UPDATE_MASK_DATA",
-      payload: {
-        imageId: activeImage.id,
-        maskId: activeMaskRef.current.id,
-        newMaskData: strokeAccumulator.current,
-        isDirty: true,
-      },
-    });
+    dispatchMaskUpdate();
     dispatch({
       type: "PUSH_HISTORY",
       payload: {
@@ -97,7 +95,8 @@ export function useMaskStrokeHandlers({ activeImage, brushSettings, dispatch }) 
       },
     });
     strokeAccumulator.current = null;
-  }, [activeImage, brushSettings.tool, dispatch]);
+    lastPointRef.current = null;
+  }, [activeImage, brushSettings.tool, dispatch, dispatchMaskUpdate]);
 
   return {
     activeMaskRef,

@@ -128,90 +128,96 @@ function cropPixels(data, srcWidth, x, y, cw, ch) {
   return result;
 }
 
+function applyAllAdjustments(buffer, adjustments = {}) {
+  const {
+    exposure=0, brightness=0, contrast=0,
+    highlights=0, shadows=0, whites=0, blacks=0,
+    temperature=0, tint=0, hue=0, saturation=0, vibrance=0,
+  } = adjustments;
+
+  applyExposure(buffer, exposure);
+  applyBrightness(buffer, brightness);
+  applyContrast(buffer, contrast);
+  applyHighlights(buffer, highlights);
+  applyShadows(buffer, shadows);
+  applyWhites(buffer, whites);
+  applyBlacks(buffer, blacks);
+  applyTemperature(buffer, temperature);
+  applyTint(buffer, tint);
+  applyColourGroup(buffer, hue, saturation, vibrance);
+}
+
+function hasNonZeroAdjustments(adjustments = {}) {
+  return Object.values(adjustments).some((v) => v !== 0);
+}
+
+function blendMasksIntoBuffer(buffer, masks) {
+  if (!Array.isArray(masks) || masks.length === 0) return;
+
+  for (const mask of masks) {
+    if (!mask?.visible) continue;
+
+    const mAdj = mask.adjustments || {};
+    if (!hasNonZeroAdjustments(mAdj)) continue;
+
+    const maskData = mask.maskData;
+    const hasPaintedPixels = maskData.some(v => v > 0);
+    if (!hasPaintedPixels && !mask.inverted) continue;
+
+    const scratchBuffer = new Uint8ClampedArray(buffer);
+    applyAllAdjustments(scratchBuffer, mAdj);
+
+    for (let i = 0; i < buffer.length; i += 4) {
+      const pixelIdx = i / 4;
+      let maskVal = maskData[pixelIdx];
+      if (mask.inverted) maskVal = 255 - maskVal;
+
+      if (maskVal === 0) continue;
+
+      if (maskVal === 255) {
+        buffer[i]   = scratchBuffer[i];
+        buffer[i+1] = scratchBuffer[i+1];
+        buffer[i+2] = scratchBuffer[i+2];
+      } else {
+        const t = maskVal / 255;
+        buffer[i]   = Math.round(buffer[i]   + (scratchBuffer[i]   - buffer[i])   * t);
+        buffer[i+1] = Math.round(buffer[i+1] + (scratchBuffer[i+1] - buffer[i+1]) * t);
+        buffer[i+2] = Math.round(buffer[i+2] + (scratchBuffer[i+2] - buffer[i+2]) * t);
+      }
+    }
+  }
+}
+
 self.onmessage = function (e) {
   const msg = e.data;
 
   try {
     if (msg.type === 'PROCESS') {
-      // FIX: Ensure we receive masks from EditorCanvas!
       const { id, pixelData, width, height, adjustments, masks } = msg;
       const buffer = new Uint8ClampedArray(pixelData);
 
-      const { 
-        exposure=0, brightness=0, contrast=0,
-        highlights=0, shadows=0, whites=0, blacks=0,
-        temperature=0, tint=0, hue=0, saturation=0, vibrance=0
-      } = adjustments;
-
-      // --- PHASE A: Global Adjustments ---
-      applyExposure(buffer, exposure);
-      applyBrightness(buffer, brightness);
-      applyContrast(buffer, contrast);
-      applyHighlights(buffer, highlights);
-      applyShadows(buffer, shadows);
-      applyWhites(buffer, whites);
-      applyBlacks(buffer, blacks);
-      
-      applyTemperature(buffer, temperature);
-      applyTint(buffer, tint);
-      applyColourGroup(buffer, hue, saturation, vibrance);
-
-      // --- PHASE B: Mask Blending ---
-      if (masks && masks.length > 0) {
-        for (const mask of masks) {
-          // Skip invisible masks
-          if (!mask.visible) continue;
-
-          // Check if this mask has any non-zero adjustments to apply
-          const mAdj = mask.adjustments;
-          const hasAdjustments = Object.values(mAdj).some(v => v !== 0);
-          if (!hasAdjustments) continue;
-
-          // Check if any pixel in the mask is actually painted
-          const hasPaintedPixels = mask.maskData.some(v => v > 0);
-          if (!hasPaintedPixels && !mask.inverted) continue;
-          
-          // 1. Create a scratch copy
-          const scratchBuffer = new Uint8ClampedArray(buffer);
-          
-          // 2. Apply local adjustments to the scratch layer
-          applyExposure(scratchBuffer, mAdj.exposure);
-          applyBrightness(scratchBuffer, mAdj.brightness);
-          applyContrast(scratchBuffer, mAdj.contrast);
-          applyHighlights(scratchBuffer, mAdj.highlights);
-          applyShadows(scratchBuffer, mAdj.shadows);
-          applyWhites(scratchBuffer, mAdj.whites);
-          applyBlacks(scratchBuffer, mAdj.blacks);
-          applyTemperature(scratchBuffer, mAdj.temperature);
-          applyTint(scratchBuffer, mAdj.tint);
-          applyColourGroup(scratchBuffer, mAdj.hue, mAdj.saturation, mAdj.vibrance);
-
-          // 3. Blend based on mask alpha
-          const maskData = mask.maskData; 
-          
-          for (let i = 0; i < buffer.length; i += 4) {
-            const pixelIdx = i / 4;
-            let maskVal = maskData[pixelIdx];
-            if (mask.inverted) maskVal = 255 - maskVal;
-
-            if (maskVal === 0) continue; // Skip unpainted pixels
-
-            if (maskVal === 255) {
-              buffer[i]   = scratchBuffer[i];
-              buffer[i+1] = scratchBuffer[i+1];
-              buffer[i+2] = scratchBuffer[i+2];
-            } else {
-              const t = maskVal / 255;
-              buffer[i]   = Math.round(buffer[i]   + (scratchBuffer[i]   - buffer[i])   * t);
-              buffer[i+1] = Math.round(buffer[i+1] + (scratchBuffer[i+1] - buffer[i+1]) * t);
-              buffer[i+2] = Math.round(buffer[i+2] + (scratchBuffer[i+2] - buffer[i+2]) * t);
-            }
-          }
-        }
-      }
+      applyAllAdjustments(buffer, adjustments);
+      blendMasksIntoBuffer(buffer, masks);
 
       self.postMessage(
         { type: 'DONE', id, pixelData: buffer.buffer, width, height },
+        [buffer.buffer]
+      );
+
+    } else if (msg.type === 'PROCESS_CHUNK') {
+      const { id, chunkIndex, pixelData, adjustments, masks } = msg;
+      const buffer = new Uint8ClampedArray(pixelData);
+
+      applyAllAdjustments(buffer, adjustments);
+      blendMasksIntoBuffer(buffer, masks);
+
+      self.postMessage(
+        {
+          type: 'DONE',
+          id,
+          chunkIndex,
+          pixelData: buffer.buffer,
+        },
         [buffer.buffer]
       );
 

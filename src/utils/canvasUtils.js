@@ -75,7 +75,7 @@ export function buildProcessingSignature(activeAdjustments, masks = []) {
       .map(
         (m) =>
           m.id +
-          m.isDirty +
+          (m.revision || 0) +
           m.visible +
           m.inverted +
           JSON.stringify(m.adjustments),

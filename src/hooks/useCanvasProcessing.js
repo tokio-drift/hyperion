@@ -13,10 +13,56 @@ const WORKER_URL = new URL(
   import.meta.url,
 );
 
+const MAX_POOL_SIZE = 8;
+const MIN_PIXELS_PER_WORKER = 512 * 512;
+
+function getTargetWorkerCount(width, height, maxWorkers) {
+  const pixelCount = width * height;
+  const bySize = Math.max(1, Math.ceil(pixelCount / MIN_PIXELS_PER_WORKER));
+  return Math.max(1, Math.min(maxWorkers, bySize));
+}
+
+function hasNonZeroAdjustments(adjustments = {}) {
+  return Object.values(adjustments).some((v) => v !== 0);
+}
+
+function buildChunkMasks(masks, startRow, chunkHeight, width) {
+  if (!Array.isArray(masks) || masks.length === 0) return [];
+
+  const start = startRow * width;
+  const end = start + chunkHeight * width;
+  const chunkMasks = [];
+
+  for (const mask of masks) {
+    if (!mask?.visible) continue;
+    const mAdj = mask.adjustments || {};
+    if (!hasNonZeroAdjustments(mAdj)) continue;
+    if (!mask.maskData || typeof mask.maskData.slice !== "function") continue;
+
+    const sliced = mask.maskData.slice(start, end);
+    const maskData =
+      sliced instanceof Uint8ClampedArray
+        ? sliced
+        : new Uint8ClampedArray(sliced);
+
+    if (!mask.inverted && !maskData.some((v) => v > 0)) continue;
+
+    chunkMasks.push({
+      visible: true,
+      inverted: !!mask.inverted,
+      adjustments: mAdj,
+      maskData,
+    });
+  }
+
+  return chunkMasks;
+}
+
 export function useCanvasProcessing({
   activeImage,
   activeAdjustments,
   activeCrop,
+  maskMode = false,
   compareMode,
   zoom,
   pan,
@@ -25,9 +71,11 @@ export function useCanvasProcessing({
 }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
-  const workerRef = useRef(null);
+  const workerPoolRef = useRef([]);
   const pendingRef = useRef(null);
   const busyRef = useRef(false);
+  const activeJobRef = useRef(null);
+  const jobIdRef = useRef(0);
   const processedRef = useRef(null);
   const offscreenRef = useRef(null);
   const lastDataRef = useRef(null);
@@ -121,36 +169,142 @@ export function useCanvasProcessing({
     return () => ro.disconnect();
   }, [activeImage]);
 
-  const sendToWorker = useCallback((msg) => {
-    if (!workerRef.current) return;
+  const dispatchProcessJob = useCallback((msg) => {
+    const workers = workerPoolRef.current;
+    if (!workers.length) return;
+
+    const { id, width, height, pixelData, adjustments, masks } = msg;
+    const source = new Uint8ClampedArray(pixelData);
+    const workerCount = getTargetWorkerCount(width, height, workers.length);
+    const rowsPerChunk = Math.ceil(height / workerCount);
+    const chunkCount = Math.ceil(height / rowsPerChunk);
+
+    activeJobRef.current = {
+      id,
+      width,
+      height,
+      chunkCount,
+      completed: 0,
+      chunks: new Array(chunkCount),
+    };
     busyRef.current = true;
-    workerRef.current.postMessage(msg, [msg.pixelData]);
+
+    for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
+      const startRow = chunkIndex * rowsPerChunk;
+      const chunkHeight = Math.min(rowsPerChunk, height - startRow);
+      const pixelStart = startRow * width * 4;
+      const pixelEnd = pixelStart + chunkHeight * width * 4;
+      const chunkPixels = source.slice(pixelStart, pixelEnd);
+      const chunkMasks = buildChunkMasks(masks, startRow, chunkHeight, width);
+      const transferList = [chunkPixels.buffer];
+
+      for (const mask of chunkMasks) {
+        transferList.push(mask.maskData.buffer);
+      }
+
+      const worker = workers[chunkIndex % workerCount];
+      worker.postMessage(
+        {
+          type: "PROCESS_CHUNK",
+          id,
+          chunkIndex,
+          pixelData: chunkPixels.buffer,
+          adjustments,
+          masks: chunkMasks,
+        },
+        transferList,
+      );
+    }
   }, []);
 
-  useEffect(() => {
-    const w = new Worker(WORKER_URL, { type: "module" });
-    workerRef.current = w;
+  const drainPending = useCallback(() => {
+    if (!pendingRef.current) return;
+    const next = pendingRef.current;
+    pendingRef.current = null;
+    dispatchProcessJob(next);
+  }, [dispatchProcessJob]);
 
-    w.onmessage = (e) => {
-      const { type, pixelData, width, height } = e.data;
-      busyRef.current = false;
-      if (type !== "DONE") return;
+  const handleWorkerMessage = useCallback(
+    (e) => {
+      const job = activeJobRef.current;
+      if (!job) return;
 
-      processedRef.current = new ImageData(
-        new Uint8ClampedArray(pixelData),
-        width,
-        height,
-      );
-      if (drawRef.current) drawRef.current();
-      if (pendingRef.current) {
-        const next = pendingRef.current;
-        pendingRef.current = null;
-        sendToWorker(next);
+      const { type, id, chunkIndex, pixelData } = e.data;
+      if (id !== job.id) return;
+
+      if (type === "ERROR") {
+        busyRef.current = false;
+        activeJobRef.current = null;
+        drainPending();
+        return;
       }
-    };
 
-    return () => w.terminate();
-  }, [sendToWorker]);
+      if (type !== "DONE" || typeof chunkIndex !== "number") return;
+
+      job.chunks[chunkIndex] = new Uint8ClampedArray(pixelData);
+      job.completed += 1;
+
+      if (job.completed !== job.chunkCount) return;
+
+      const merged = new Uint8ClampedArray(job.width * job.height * 4);
+      let offset = 0;
+      for (let i = 0; i < job.chunkCount; i += 1) {
+        const chunk = job.chunks[i];
+        if (!chunk) continue;
+        merged.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      processedRef.current = new ImageData(merged, job.width, job.height);
+      activeJobRef.current = null;
+      busyRef.current = false;
+
+      if (drawRef.current) drawRef.current();
+      drainPending();
+    },
+    [drainPending],
+  );
+
+  useEffect(() => {
+    const poolSize = Math.max(
+      1,
+      Math.min(MAX_POOL_SIZE, navigator.hardwareConcurrency || 4),
+    );
+    const workers = Array.from(
+      { length: poolSize },
+      () => new Worker(WORKER_URL, { type: "module" }),
+    );
+
+    for (const worker of workers) {
+      worker.onmessage = handleWorkerMessage;
+      worker.onerror = () => {
+        busyRef.current = false;
+        activeJobRef.current = null;
+        drainPending();
+      };
+    }
+
+    workerPoolRef.current = workers;
+
+    return () => {
+      for (const worker of workers) worker.terminate();
+      workerPoolRef.current = [];
+      activeJobRef.current = null;
+      pendingRef.current = null;
+      busyRef.current = false;
+    };
+  }, [drainPending, handleWorkerMessage]);
+
+  const queueProcessJob = useCallback(
+    (msg) => {
+      if (busyRef.current) {
+        pendingRef.current = msg;
+        return;
+      }
+      dispatchProcessJob(msg);
+    },
+    [dispatchProcessJob],
+  );
 
   const debouncedProcess = useMemo(
     () =>
@@ -158,7 +312,7 @@ export function useCanvasProcessing({
         if (!orig) return;
         const msg = {
           type: "PROCESS",
-          id: Date.now(),
+          id: ++jobIdRef.current,
           pixelData: new Uint8ClampedArray(orig.data).buffer,
           width: orig.width,
           height: orig.height,
@@ -166,10 +320,9 @@ export function useCanvasProcessing({
           masks,
         };
 
-        if (busyRef.current) pendingRef.current = msg;
-        else sendToWorker(msg);
-      }, 16),
-    [sendToWorker],
+        queueProcessJob(msg);
+      }, maskMode ? 48 : 16),
+    [maskMode, queueProcessJob],
   );
 
   const activeImageIdRef = useRef(null);

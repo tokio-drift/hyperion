@@ -2,12 +2,81 @@ import React, { useRef, useEffect, useCallback } from 'react';
 import { canvasToImageCoords } from '../../utils/maskUtils';
 
 export default function MaskCanvas({
-  maskData, inverted, width: iW, height: iH, imageRect, 
+  maskData, maskRevision = 0, inverted, width: iW, height: iH, imageRect,
   showOverlay, brushSettings, maskMode, onStrokeStart, onStrokeMove, onStrokeEnd
 }) {
   const canvasRef = useRef(null);
   const cursorRef = useRef({ x: -100, y: -100 });
   const isPainting = useRef(false);
+  const activePointerId = useRef(null);
+  const overlayCanvasRef = useRef(null);
+  const overlayCtxRef = useRef(null);
+  const overlayImageDataRef = useRef(null);
+  const framePendingRef = useRef(false);
+  const renderFrameRef = useRef(null);
+
+  const scheduleRender = useCallback(() => {
+    if (framePendingRef.current) return;
+    framePendingRef.current = true;
+    requestAnimationFrame(() => {
+      framePendingRef.current = false;
+      renderFrameRef.current?.();
+    });
+  }, []);
+
+  const ensureOverlayBuffer = useCallback(() => {
+    if (!overlayCanvasRef.current) {
+      overlayCanvasRef.current =
+        typeof OffscreenCanvas !== 'undefined'
+          ? new OffscreenCanvas(iW, iH)
+          : document.createElement('canvas');
+    }
+
+    const overlayCanvas = overlayCanvasRef.current;
+    if (overlayCanvas.width !== iW || overlayCanvas.height !== iH) {
+      overlayCanvas.width = iW;
+      overlayCanvas.height = iH;
+      overlayCtxRef.current = null;
+      overlayImageDataRef.current = null;
+    }
+
+    if (!overlayCtxRef.current) {
+      overlayCtxRef.current = overlayCanvas.getContext('2d');
+    }
+
+    if (!overlayImageDataRef.current) {
+      overlayImageDataRef.current = overlayCtxRef.current.createImageData(iW, iH);
+    }
+
+    return {
+      overlayCanvas,
+      overlayCtx: overlayCtxRef.current,
+      overlayImageData: overlayImageDataRef.current,
+    };
+  }, [iW, iH]);
+
+  const rebuildOverlayBitmap = useCallback(() => {
+    if (!showOverlay || !maskData) {
+      return;
+    }
+
+    const { overlayCtx, overlayImageData } = ensureOverlayBuffer();
+    const out = overlayImageData.data;
+
+    out.fill(0);
+    for (let i = 0; i < maskData.length; i += 1) {
+      const val = inverted ? 255 - maskData[i] : maskData[i];
+      if (val === 0) continue;
+
+      const base = i * 4;
+      out[base] = 220;
+      out[base + 1] = 50;
+      out[base + 2] = 50;
+      out[base + 3] = Math.round(val * 0.55);
+    }
+
+    overlayCtx.putImageData(overlayImageData, 0, 0);
+  }, [ensureOverlayBuffer, inverted, maskData, showOverlay]);
 
   // Resize canvas to exactly match the container
   useEffect(() => {
@@ -20,11 +89,11 @@ export default function MaskCanvas({
       canvas.height = Math.round(parent.clientHeight * dpr);
       canvas.style.width = parent.clientWidth + "px";
       canvas.style.height = parent.clientHeight + "px";
-      renderFrame();
+      scheduleRender();
     });
     ro.observe(parent);
     return () => ro.disconnect();
-  }, []);
+  }, [scheduleRender]);
 
   const renderFrame = useCallback(() => {
     const canvas = canvasRef.current;
@@ -34,21 +103,8 @@ export default function MaskCanvas({
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // 1. Draw Red Tint Overlay
-    if (showOverlay && maskData && imageRect) {
-      const offscreen = new OffscreenCanvas(iW, iH);
-      const oCtx = offscreen.getContext('2d');
-      const imgData = oCtx.createImageData(iW, iH);
-      
-      for (let i = 0; i < maskData.length; i++) {
-        const val = inverted ? (255 - maskData[i]) : maskData[i];
-        if (val > 0) {
-          imgData.data[i*4]   = 220; // R
-          imgData.data[i*4+1] = 50;  // G
-          imgData.data[i*4+2] = 50;  // B
-          imgData.data[i*4+3] = Math.round(val * 0.55); // Alpha
-        }
-      }
-      oCtx.putImageData(imgData, 0, 0);
+    if (showOverlay && imageRect && overlayCanvasRef.current) {
+      const offscreen = overlayCanvasRef.current;
 
       const dW = Math.round(iW * imageRect.cssScale * dpr);
       const dH = Math.round(iH * imageRect.cssScale * dpr);
@@ -62,7 +118,7 @@ export default function MaskCanvas({
     }
 
     // 2. Draw Brush Cursor
-    if (maskMode) {
+    if (maskMode && imageRect) {
       const cx = cursorRef.current.x * dpr;
       const cy = cursorRef.current.y * dpr;
       const radius = (brushSettings.size / 2) * imageRect.cssScale * dpr;
@@ -89,42 +145,72 @@ export default function MaskCanvas({
         ctx.setLineDash([]);
       }
     }
-  }, [maskData, inverted, iW, iH, imageRect, showOverlay, brushSettings, maskMode]);
+  }, [iW, iH, imageRect, showOverlay, brushSettings, maskMode]);
 
   useEffect(() => {
-    requestAnimationFrame(renderFrame);
+    renderFrameRef.current = renderFrame;
   }, [renderFrame]);
+
+  useEffect(() => {
+    rebuildOverlayBitmap();
+    scheduleRender();
+  }, [rebuildOverlayBitmap, scheduleRender, maskRevision]);
+
+  useEffect(() => {
+    scheduleRender();
+  }, [renderFrame, scheduleRender]);
 
   // Pointer Events
   const handlePointerDown = (e) => {
     if (!maskMode || !imageRect || e.button !== 0) return;
+    e.preventDefault();
     isPainting.current = true;
-    const rect = canvasRef.current.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-    const imgCoords = canvasToImageCoords(mx, my, imageRect);
-    onStrokeStart(imgCoords.x, imgCoords.y);
-  };
+    activePointerId.current = e.pointerId;
+    canvasRef.current.setPointerCapture(e.pointerId);
 
-  const handlePointerMove = (e) => {
-    if (!maskMode || !imageRect) return;
     const rect = canvasRef.current.getBoundingClientRect();
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
     cursorRef.current = { x: mx, y: my };
+    const imgCoords = canvasToImageCoords(mx, my, imageRect);
+    onStrokeStart(imgCoords.x, imgCoords.y);
+    scheduleRender();
+  };
 
-    if (isPainting.current) {
-      const imgCoords = canvasToImageCoords(mx, my, imageRect);
-      onStrokeMove(imgCoords.x, imgCoords.y);
+  const handlePointerMove = (e) => {
+    if (!maskMode || !imageRect) return;
+    const nativeEvent = e.nativeEvent || e;
+    const samples =
+      typeof nativeEvent.getCoalescedEvents === 'function'
+        ? nativeEvent.getCoalescedEvents()
+        : [nativeEvent];
+
+    const rect = canvasRef.current.getBoundingClientRect();
+    for (const sample of samples) {
+      const mx = sample.clientX - rect.left;
+      const my = sample.clientY - rect.top;
+      cursorRef.current = { x: mx, y: my };
+
+      if (isPainting.current) {
+        const imgCoords = canvasToImageCoords(mx, my, imageRect);
+        onStrokeMove(imgCoords.x, imgCoords.y);
+      }
     }
-    requestAnimationFrame(renderFrame); // Update cursor position
+
+    scheduleRender();
   };
 
   const handlePointerUp = () => {
+    if (activePointerId.current !== null && canvasRef.current?.hasPointerCapture(activePointerId.current)) {
+      canvasRef.current.releasePointerCapture(activePointerId.current);
+    }
+    activePointerId.current = null;
+
     if (isPainting.current) {
       isPainting.current = false;
       onStrokeEnd();
     }
+    scheduleRender();
   };
 
   return (
@@ -135,6 +221,7 @@ export default function MaskCanvas({
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
       onPointerLeave={handlePointerUp}
     />
   );
