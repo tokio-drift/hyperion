@@ -53,18 +53,24 @@ export default function MaskPanel() {
     <div className="flex flex-col h-full overflow-y-auto">
       {/* SECTION A: MASK LIST */}
       <div className="panel-section">
-        <div className="flex justify-between items-center mb-3">
+        <div className="flex justify-between items-center mb-2">
           <span className="text-xs font-semibold text-gray-300 uppercase">Masks</span>
-          <div className="flex gap-2">
-            <button onClick={() => dispatch({ type: 'TOGGLE_MASK_OVERLAY' })} className={`text-xs ${showMaskOverlay ? 'text-blue-400' : 'text-gray-500'}`}>
-              [Overlay {showMaskOverlay ? 'On' : 'Off'}]
-            </button>
-            <button onClick={handleAddMask} className="text-xs text-blue-400 hover:text-blue-300">+ New</button>
-          </div>
+          <span className="text-xs text-gray-500">{masks.length} total</span>
         </div>
 
+        <button
+          onClick={handleAddMask}
+          className="w-full mb-3 py-2 text-xs rounded font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+        >
+          + New Mask
+        </button>
+
         <div className="space-y-1 mb-4">
-          {masks.length === 0 && <p className="text-xs text-gray-500">No masks created.</p>}
+          {masks.length === 0 && (
+            <p className="text-xs text-gray-500 bg-gray-900/70 border border-gray-800 rounded px-2.5 py-2">
+              No masks yet. Create one to start local brushing.
+            </p>
+          )}
           {masks.map(m => (
             <div key={m.id} className={`flex items-center justify-between p-2 rounded cursor-pointer ${activeMaskId === m.id ? 'bg-blue-900/30' : 'hover:bg-gray-800'}`}
                  onClick={() => dispatch({ type: 'SET_ACTIVE_MASK', payload: { imageId: activeImage.id, maskId: m.id } })}>
@@ -92,13 +98,23 @@ export default function MaskPanel() {
           </div>
         </div>
 
-        <button 
-          onClick={() => dispatch({ type: 'SET_MASK_MODE', payload: !maskMode })}
-          disabled={!activeMaskId}
-          className={`w-full py-2 text-xs rounded font-medium transition-colors ${maskMode ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'} disabled:opacity-50`}
-        >
-          {maskMode ? 'Exit Mask Mode' : 'Enter Mask Mode (B)'}
-        </button>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => dispatch({ type: 'TOGGLE_MASK_OVERLAY' })}
+            title="Shows a red preview of the active mask"
+            className={`py-2 text-xs rounded border transition-colors ${showMaskOverlay ? 'border-blue-500 bg-blue-500/15 text-blue-300' : 'border-gray-700 text-gray-400 hover:border-gray-600 hover:text-gray-200'}`}
+          >
+            Mask Overlay {showMaskOverlay ? 'On' : 'Off'}
+          </button>
+          <button
+            onClick={() => dispatch({ type: 'SET_MASK_MODE', payload: !maskMode })}
+            disabled={!activeMaskId}
+            className={`py-2 text-xs rounded font-medium transition-colors ${maskMode ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'} disabled:opacity-50`}
+          >
+            {maskMode ? 'Stop Masking' : (brushSettings.tool === 'erase' ? 'Use Eraser' : 'Use Brush')}
+          </button>
+        </div>
+        <p className="text-[11px] text-gray-600 mt-2">Shortcut: press B to toggle mask mode</p>
       </div>
 
       {/* SECTION B: LOCAL ADJUSTMENTS */}

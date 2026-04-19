@@ -86,6 +86,46 @@ export function reduceImageActions(state, action) {
       };
     }
 
+    case "RESTORE_SESSION": {
+      const {
+        adjustments,
+        crop,
+        activeImageId,
+        brushSettings,
+        showMaskOverlay,
+        ui,
+      } = action.payload;
+
+      const resolvedActiveId =
+        state.images.find((img) => img.id === activeImageId)?.id ||
+        state.activeImageId ||
+        state.images[0]?.id ||
+        null;
+
+      return {
+        ...state,
+        activeImageId: resolvedActiveId,
+        adjustments: adjustments || state.adjustments,
+        crop: crop || state.crop,
+        brushSettings: brushSettings
+          ? { ...state.brushSettings, ...brushSettings }
+          : state.brushSettings,
+        showMaskOverlay:
+          typeof showMaskOverlay === "boolean"
+            ? showMaskOverlay
+            : state.showMaskOverlay,
+        ui: ui
+          ? {
+              ...state.ui,
+              ...ui,
+              exportModalOpen: false,
+            }
+          : state.ui,
+        compareMode: false,
+        maskMode: false,
+      };
+    }
+
     default:
       return null;
   }

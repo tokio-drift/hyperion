@@ -6,8 +6,9 @@ import EditorCanvas from './components/canvas/EditorCanvas';
 import SidePanel from './components/panels/SidePanel';
 import ExportModal from './components/export/ExportModal';
 import ToastStack from './components/shared/ToastStack';
+import { saveSession, loadSession, clearSession } from './utils/sessionStorage';
 
-const SESSION_KEY = 'hyperion_session';
+const LEGACY_SESSION_KEY = 'hyperion_session';
 
 export default function App() {
   const { state, dispatch, showToast } = useEditor();
@@ -15,45 +16,89 @@ export default function App() {
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
   useKeyboardShortcuts();
 
-  // ── Auto-save to localStorage (debounced — don't stringify on every slider tick) ──
+  // ── Auto-save to IndexedDB (debounced to avoid heavy writes during drags) ──
   const saveTimerRef = useRef(null);
-  useEffect(() => {
-    if (!state.images.length) return;
-    clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
-      try {
-        const session = {
-          adjustments: state.adjustments,
-          history: state.history,
-          historyIndex: state.historyIndex,
-          activeImageId: state.activeImageId,
-          imageMeta: state.images.map(img => ({ id: img.id, name: img.name, width: img.width, height: img.height })),
-        };
-        localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-      } catch {
-        // localStorage may be unavailable in some contexts
-      }
-    }, 1000); // Only save after 1s of inactivity
-    return () => clearTimeout(saveTimerRef.current);
-  }, [state.adjustments, state.history, state.historyIndex, state.activeImageId]);
+  const hydrationDoneRef = useRef(false);
 
-  // ── Restore session on first load ─────────────────────────────────────────
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(SESSION_KEY);
-      if (!raw) return;
-      const session = JSON.parse(raw);
-      if (session?.imageMeta?.length) {
-        showToast(
-          `Session restored (${session.imageMeta.length} image${session.imageMeta.length > 1 ? 's' : ''} — please re-upload to continue editing)`,
-          'info',
-          5000
-        );
+    if (!hydrationDoneRef.current) return;
+
+    clearTimeout(saveTimerRef.current);
+
+    saveTimerRef.current = setTimeout(() => {
+      (async () => {
+        try {
+          if (!state.images.length) {
+            await clearSession();
+            return;
+          }
+
+          await saveSession(state);
+
+          // Clean up old metadata-only localStorage session once IndexedDB persistence is active.
+          try {
+            localStorage.removeItem(LEGACY_SESSION_KEY);
+          } catch {
+            // Ignore storage access errors.
+          }
+        } catch (err) {
+          console.warn('Failed to persist session to IndexedDB:', err);
+        }
+      })();
+    }, 900);
+
+    return () => clearTimeout(saveTimerRef.current);
+  }, [
+    state.images,
+    state.activeImageId,
+    state.adjustments,
+    state.crop,
+    state.brushSettings,
+    state.showMaskOverlay,
+    state.ui.sidePanelOpen,
+    state.ui.activePanelTab,
+  ]);
+
+  // ── Restore full session on first load ────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const restored = await loadSession();
+        if (cancelled) return;
+
+        if (restored?.images?.length) {
+          dispatch({ type: 'LOAD_IMAGES', payload: restored.images });
+          dispatch({
+            type: 'RESTORE_SESSION',
+            payload: {
+              adjustments: restored.adjustments,
+              crop: restored.crop,
+              activeImageId: restored.activeImageId,
+              brushSettings: restored.brushSettings,
+              showMaskOverlay: restored.showMaskOverlay,
+              ui: restored.ui,
+            },
+          });
+
+          showToast(
+            `Session restored (${restored.images.length} image${restored.images.length > 1 ? 's' : ''})`,
+            'success',
+            3800
+          );
+        }
+      } catch (err) {
+        console.warn('Failed to restore session from IndexedDB:', err);
+      } finally {
+        hydrationDoneRef.current = true;
       }
-    } catch {
-      // Ignore corrupt session data
-    }
-  }, []); // eslint-disable-line
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatch, showToast]);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden" style={{ background: '#111' }}>
