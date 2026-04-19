@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useMemo } from "react";
+import { useRef, useEffect, useCallback, useMemo, useState } from "react";
 import {
   debounce,
   drawCheckerboard,
@@ -7,6 +7,11 @@ import {
   drawCropHandles,
   buildProcessingSignature,
 } from "../utils/canvasUtils";
+import {
+  getTargetWorkerCount,
+  buildChunkMasks,
+} from "./processing/workerChunkUtils";
+import { useWebGLProcessing } from "./processing/useWebGLProcessing";
 
 const WORKER_URL = new URL(
   "../workers/imageProcessor.worker.js",
@@ -14,49 +19,6 @@ const WORKER_URL = new URL(
 );
 
 const MAX_POOL_SIZE = 8;
-const MIN_PIXELS_PER_WORKER = 512 * 512;
-
-function getTargetWorkerCount(width, height, maxWorkers) {
-  const pixelCount = width * height;
-  const bySize = Math.max(1, Math.ceil(pixelCount / MIN_PIXELS_PER_WORKER));
-  return Math.max(1, Math.min(maxWorkers, bySize));
-}
-
-function hasNonZeroAdjustments(adjustments = {}) {
-  return Object.values(adjustments).some((v) => v !== 0);
-}
-
-function buildChunkMasks(masks, startRow, chunkHeight, width) {
-  if (!Array.isArray(masks) || masks.length === 0) return [];
-
-  const start = startRow * width;
-  const end = start + chunkHeight * width;
-  const chunkMasks = [];
-
-  for (const mask of masks) {
-    if (!mask?.visible) continue;
-    const mAdj = mask.adjustments || {};
-    if (!hasNonZeroAdjustments(mAdj)) continue;
-    if (!mask.maskData || typeof mask.maskData.slice !== "function") continue;
-
-    const sliced = mask.maskData.slice(start, end);
-    const maskData =
-      sliced instanceof Uint8ClampedArray
-        ? sliced
-        : new Uint8ClampedArray(sliced);
-
-    if (!mask.inverted && !maskData.some((v) => v > 0)) continue;
-
-    chunkMasks.push({
-      visible: true,
-      inverted: !!mask.inverted,
-      adjustments: mAdj,
-      maskData,
-    });
-  }
-
-  return chunkMasks;
-}
 
 export function useCanvasProcessing({
   activeImage,
@@ -80,6 +42,23 @@ export function useCanvasProcessing({
   const offscreenRef = useRef(null);
   const lastDataRef = useRef(null);
   const drawRef = useRef(null);
+  const latestProcessIdRef = useRef(0);
+  const lastOriginalDataRef = useRef(null);
+  const [processingBackend, setProcessingBackend] = useState("cpu");
+
+  const reportBackend = useCallback((nextBackend) => {
+    setProcessingBackend((current) =>
+      current === nextBackend ? current : nextBackend,
+    );
+  }, []);
+
+  const { tryProcessWithWebGL } = useWebGLProcessing({
+    latestProcessIdRef,
+    processedRef,
+    drawRef,
+    pendingRef,
+    onBackendChange: reportBackend,
+  });
 
   const getTransform = useCallback(() => {
     const container = containerRef.current;
@@ -255,6 +234,13 @@ export function useCanvasProcessing({
         offset += chunk.length;
       }
 
+      if (job.id !== latestProcessIdRef.current) {
+        activeJobRef.current = null;
+        busyRef.current = false;
+        drainPending();
+        return;
+      }
+
       processedRef.current = new ImageData(merged, job.width, job.height);
       activeJobRef.current = null;
       busyRef.current = false;
@@ -310,9 +296,16 @@ export function useCanvasProcessing({
     () =>
       debounce((orig, adj, masks) => {
         if (!orig) return;
+        const id = ++jobIdRef.current;
+        latestProcessIdRef.current = id;
+
+        const usedWebGL = tryProcessWithWebGL(orig, adj, masks, id);
+        if (usedWebGL) return;
+        reportBackend("cpu");
+
         const msg = {
           type: "PROCESS",
-          id: ++jobIdRef.current,
+          id,
           pixelData: new Uint8ClampedArray(orig.data).buffer,
           width: orig.width,
           height: orig.height,
@@ -322,7 +315,7 @@ export function useCanvasProcessing({
 
         queueProcessJob(msg);
       }, maskMode ? 48 : 16),
-    [maskMode, queueProcessJob],
+    [maskMode, queueProcessJob, reportBackend, tryProcessWithWebGL],
   );
 
   const activeImageIdRef = useRef(null);
@@ -336,7 +329,10 @@ export function useCanvasProcessing({
       activeImageIdRef.current = null;
       lastProcessSigRef.current = null;
       lastImageDimensionsRef.current = null;
+      lastOriginalDataRef.current = null;
       needsReprocessRef.current = false;
+      latestProcessIdRef.current = 0;
+      reportBackend("cpu");
       const c = canvasRef.current;
       if (c) c.getContext("2d").clearRect(0, 0, c.width, c.height);
       return;
@@ -347,6 +343,7 @@ export function useCanvasProcessing({
       activeImageIdRef.current = activeImage.id;
       lastProcessSigRef.current = null;
       lastImageDimensionsRef.current = null;
+      lastOriginalDataRef.current = null;
       needsReprocessRef.current = false;
     }
 
@@ -354,6 +351,14 @@ export function useCanvasProcessing({
     const dimChanged = lastImageDimensionsRef.current !== currentDims;
     if (dimChanged) {
       lastImageDimensionsRef.current = currentDims;
+      needsReprocessRef.current = true;
+      lastProcessSigRef.current = null;
+    }
+
+    const sourceChanged = lastOriginalDataRef.current !== activeImage.originalData;
+    if (sourceChanged) {
+      lastOriginalDataRef.current = activeImage.originalData;
+      processedRef.current = activeImage.originalData;
       needsReprocessRef.current = true;
       lastProcessSigRef.current = null;
     }
@@ -372,7 +377,7 @@ export function useCanvasProcessing({
     } else {
       if (drawRef.current) drawRef.current();
     }
-  }, [activeImage, activeAdjustments, debouncedProcess]);
+  }, [activeImage, activeAdjustments, debouncedProcess, reportBackend]);
 
   useEffect(() => {
     draw();
@@ -393,5 +398,6 @@ export function useCanvasProcessing({
     containerRef,
     getTransform,
     draw,
+    processingBackend,
   };
 }

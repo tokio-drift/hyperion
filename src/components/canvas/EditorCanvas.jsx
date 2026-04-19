@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useEditor } from "../../context/EditorContext";
 import UploadZone from "../upload/UploadZone";
 import MaskCanvas from "./MaskCanvas";
+import ProcessingModeIndicator from "./ProcessingModeIndicator";
 import { useMaskStrokeHandlers } from "../../hooks/useMaskStrokeHandlers";
 import { useCanvasInteractions } from "../../hooks/useCanvasInteractions";
 import { useCanvasProcessing } from "../../hooks/useCanvasProcessing";
@@ -14,7 +15,8 @@ export default function EditorCanvas() {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
 
-  const { canvasRef, containerRef, getTransform } = useCanvasProcessing({
+  const { canvasRef, containerRef, getTransform, processingBackend } =
+    useCanvasProcessing({
     activeImage,
     activeAdjustments,
     activeCrop,
@@ -24,7 +26,7 @@ export default function EditorCanvas() {
     pan,
     setZoom,
     setPan,
-  });
+    });
 
   const {
     cursorStyle,
@@ -90,6 +92,10 @@ export default function EditorCanvas() {
           </span>
         </div>
       )}
+
+      <div className="absolute top-3 right-3 z-40 pointer-events-auto">
+        <ProcessingModeIndicator mode={processingBackend} />
+      </div>
 
       <MaskCanvas
         maskData={activeMaskRef.current?.maskData}
