@@ -16,7 +16,7 @@ export default function HelpManual() {
 
   useEffect(() => {
     if (state.ui.helpModalOpen) {
-      fetch("http://localhost:5000/api/help/manual.json")
+      fetch("/api/help/manual.json")
         .then(res => res.json())
         .then(json => setData(json))
         .catch(() => console.error("Failed to load manual"));
