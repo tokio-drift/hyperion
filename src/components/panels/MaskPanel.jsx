@@ -93,7 +93,9 @@ export default function MaskPanel() {
           <Slider label="Feather" value={brushSettings.feather} min={0} max={150} onChange={v => handleBrushChange('feather', v)} />
           <Slider label="Opacity" value={brushSettings.opacity} min={1} max={100} onChange={v => handleBrushChange('opacity', v)} />
           <div className="flex gap-2 pt-1">
-            <button onClick={() => handleBrushChange('tool', 'paint')} className={`flex-1 py-1.5 text-xs rounded border ${brushSettings.tool === 'paint' ? 'border-blue-500 bg-blue-500/20 text-blue-300' : 'border-gray-700 text-gray-400'}`}>Paint</button>
+            <button onClick={() => handleBrushChange('tool', 'paint')} className={`flex-1 py-1.5 text-xs rounded border ${brushSettings.tool === 'paint' ? 'border-blue-500 bg-blue-500/20 text-blue-300' : 'border-gray-700 text-gray-400'}`}>Brush</button>
+            <button onClick={() => handleBrushChange('tool', 'radial')} className={`flex-1 py-1.5 text-xs rounded border ${brushSettings.tool === 'radial' ? 'border-blue-500 bg-blue-500/20 text-blue-300' : 'border-gray-700 text-gray-400'}`}>Radial</button>
+            <button onClick={() => handleBrushChange('tool', 'linear')} className={`flex-1 py-1.5 text-xs rounded border ${brushSettings.tool === 'linear' ? 'border-blue-500 bg-blue-500/20 text-blue-300' : 'border-gray-700 text-gray-400'}`}>Linear</button>
             <button onClick={() => handleBrushChange('tool', 'erase')} className={`flex-1 py-1.5 text-xs rounded border ${brushSettings.tool === 'erase' ? 'border-red-500 bg-red-500/20 text-red-300' : 'border-gray-700 text-gray-400'}`}>Erase</button>
           </div>
         </div>

@@ -106,6 +106,7 @@ export default function EditorCanvas() {
         imageRect={getTransform()}
         showOverlay={
           state.showMaskOverlay &&
+          state.ui.activePanelTab === 'mask' &&
           !!activeMaskRef.current &&
           activeMaskRef.current.visible
         }

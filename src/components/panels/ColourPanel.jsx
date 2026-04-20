@@ -73,24 +73,22 @@ export default function ColourPanel() {
         <div>
           <span className="text-xs text-gray-500 mb-3 block font-medium">White Balance</span>
           <div className="flex flex-col gap-4">
-            <div className="slider-wrapper" style={{ '--track-fill': 'linear-gradient(to right, #60a5fa, #f59e0b)' }}>
-              <Slider
-                label="Temperature"
-                value={activeAdjustments.temperature}
-                min={-100} max={100}
-                onChange={(v) => handleChange('temperature', v)}
-                tooltip="Shifts colour balance warm (positive) or cool (negative)"
-              />
-            </div>
-            <div className="slider-wrapper" style={{ '--track-fill': 'linear-gradient(to right, #4ade80, #e879f9)' }}>
-              <Slider
-                label="Tint"
-                value={activeAdjustments.tint}
-                min={-100} max={100}
-                onChange={(v) => handleChange('tint', v)}
-                tooltip="Corrects green (negative) or magenta (positive) cast"
-              />
-            </div>
+            <Slider
+              label="Temperature"
+              value={activeAdjustments.temperature}
+              min={-100} max={100}
+              onChange={(v) => handleChange('temperature', v)}
+              tooltip="Shifts colour balance warm (positive) or cool (negative)"
+              gradient="linear-gradient(to right, #60a5fa, #fbbf24, #f59e0b)"
+            />
+            <Slider
+              label="Tint"
+              value={activeAdjustments.tint}
+              min={-100} max={100}
+              onChange={(v) => handleChange('tint', v)}
+              tooltip="Corrects green (negative) or magenta (positive) cast"
+              gradient="linear-gradient(to right, #4ade80, #d4d4d4, #e879f9)"
+            />
           </div>
         </div>
 
@@ -100,15 +98,14 @@ export default function ColourPanel() {
         <div>
           <span className="text-xs text-gray-500 mb-3 block font-medium">Colour</span>
           <div className="flex flex-col gap-4">
-            <div className="slider-wrapper" style={{ '--track-fill': 'linear-gradient(to right, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)' }}>
-              <Slider
-                label="Hue"
-                value={activeAdjustments.hue}
-                min={-180} max={180}
-                onChange={(v) => handleChange('hue', v)}
-                tooltip="Rotates all colours around the colour wheel"
-              />
-            </div>
+            <Slider
+              label="Hue"
+              value={activeAdjustments.hue}
+              min={-180} max={180}
+              onChange={(v) => handleChange('hue', v)}
+              tooltip="Rotates all colours around the colour wheel"
+              gradient="linear-gradient(to right, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)"
+            />
             <Slider
               label="Saturation"
               value={activeAdjustments.saturation}
