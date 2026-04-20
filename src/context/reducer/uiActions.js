@@ -19,7 +19,13 @@ export function reduceUiActions(state, action) {
       return { ...state, ui: { ...state.ui, exportModalOpen: false } };
 
     case "TOGGLE_GALLERY":
-      return { ...state, ui: { ...state.ui, galleryOpen: action.payload ?? !state.ui.galleryOpen } };
+      return {
+        ...state,
+        ui: {
+          ...state.ui,
+          galleryOpen: action.payload ?? !state.ui.galleryOpen,
+        },
+      };
 
     case "ADD_TOAST": {
       const toast = {
@@ -29,7 +35,10 @@ export function reduceUiActions(state, action) {
       };
       return { ...state, toasts: [...state.toasts, toast] };
     }
-
+    case "OPEN_FEEDBACK_MODAL":
+      return { ...state, ui: { ...state.ui, feedbackModalOpen: true } };
+    case "CLOSE_FEEDBACK_MODAL":
+      return { ...state, ui: { ...state.ui, feedbackModalOpen: false } };
     case "REMOVE_TOAST":
       return {
         ...state,

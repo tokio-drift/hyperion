@@ -5,6 +5,7 @@ import Toolbar from './components/toolbar/Toolbar';
 import EditorCanvas from './components/canvas/EditorCanvas';
 import SidePanel from './components/panels/SidePanel';
 import ExportModal from './components/export/ExportModal';
+import FeedbackModal from './components/feedback/FeedbackModal';
 import ToastStack from './components/shared/ToastStack';
 import GalleryView from './components/gallery/GalleryView';
 import UploadZone from './components/upload/UploadZone';
@@ -37,9 +38,7 @@ export default function App() {
 
           try {
             localStorage.removeItem(LEGACY_SESSION_KEY);
-          } catch {
-            // Ignore storage access errors.
-          }
+          } catch {}
         } catch (err) {
           console.warn('Failed to persist session to IndexedDB:', err);
         }
@@ -114,12 +113,12 @@ export default function App() {
           </div>
         )}
 
-        {/* Global dropzone that won't get blocked by display:none when switching views */}
         {state.images.length > 0 && <UploadZone overlayMode />}
       </div>
 
       {state.images.length > 1 && !state.ui.galleryOpen && <Filmstrip />}
 
+      <FeedbackModal />
       <ExportModal />
       <ToastStack />
     </div>

@@ -27,14 +27,14 @@ function generateId() {
   return `img-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export default function UploadZone({ children, overlayMode = false }) {
+export default function UploadZone({ overlayMode = false }) {
   const { dispatch, showToast } = useEditor();
   const inputRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const processFiles = useCallback(async (files) => {
-    if (!files.length) return;
+    if (!files || !files.length) return;
 
     const { valid, errors } = validateFiles(Array.from(files));
 
@@ -57,6 +57,8 @@ export default function UploadZone({ children, overlayMode = false }) {
             name: file.name,
             width,
             height,
+            masks: [],
+            activeMaskId: null
           };
         })
       );
@@ -107,9 +109,7 @@ export default function UploadZone({ children, overlayMode = false }) {
   React.useEffect(() => {
     window.__hyperionOpenFilePicker = openFilePicker;
     return () => {
-      if (window.__hyperionOpenFilePicker === openFilePicker) {
-        delete window.__hyperionOpenFilePicker;
-      }
+      delete window.__hyperionOpenFilePicker;
     };
   }, [openFilePicker]);
 
@@ -125,7 +125,7 @@ export default function UploadZone({ children, overlayMode = false }) {
         {isDragging && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/60 border-2 border-dashed border-blue-400 rounded z-20">
             <div className="text-center">
-              <div className="text-4xl mb-2">+</div>
+              <div className="text-4xl mb-2 text-white">+</div>
               <p className="text-blue-300 font-medium">Drop to add images</p>
             </div>
           </div>
