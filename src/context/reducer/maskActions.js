@@ -1,4 +1,5 @@
 import { defaultAdjustments } from "./constants";
+import { rotateMask } from "../../utils/maskUtils";
 
 export function reduceMaskActions(state, action) {
   switch (action.type) {
@@ -154,6 +155,25 @@ export function reduceMaskActions(state, action) {
 
     case "TOGGLE_MASK_OVERLAY":
       return { ...state, showMaskOverlay: !state.showMaskOverlay };
+
+    case "ROTATE_MASKS": {
+      const { imageId, direction } = action.payload;
+      return {
+        ...state,
+        images: state.images.map((img) => {
+          if (img.id !== imageId) return img;
+          const rotatedMasks = img.masks.map((m) => {
+            const rotated = rotateMask(m.maskData, img.width, img.height, direction);
+            return {
+              ...m,
+              maskData: rotated.data,
+              revision: (m.revision || 0) + 1,
+            };
+          });
+          return { ...img, masks: rotatedMasks };
+        }),
+      };
+    }
 
     default:
       return null;
