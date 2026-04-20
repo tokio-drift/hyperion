@@ -1,6 +1,44 @@
 import { defaultAdjustments } from "./constants";
 import { makeEntry, pushHistory } from "../../utils/historyUtils";
 
+/**
+ * Helper: restore masks from a history entry onto the image object.
+ * Returns updated images array, or empty object if no mask snapshot.
+ */
+function restoreMasksFromEntry(state, imageId, entry) {
+  if (!entry.masks || entry.masks.length === 0) {
+    // Entry has no mask snapshot — clear masks
+    return {
+      images: state.images.map((img) =>
+        img.id === imageId
+          ? { ...img, masks: [], activeMaskId: null }
+          : img,
+      ),
+    };
+  }
+
+  // Deep-clone saved masks so they are independent from the history entry
+  const restoredMasks = entry.masks.map((m) => ({
+    ...m,
+    adjustments: { ...m.adjustments },
+    maskData: new Uint8Array(m.maskData),
+  }));
+  const lastActiveMask = restoredMasks[restoredMasks.length - 1];
+
+  return {
+    images: state.images.map((img) =>
+      img.id === imageId
+        ? { ...img, masks: restoredMasks, activeMaskId: lastActiveMask?.id || null }
+        : img,
+    ),
+  };
+}
+
+function getCurrentMasks(state, imageId) {
+  const img = state.images.find((i) => i.id === imageId);
+  return img?.masks || [];
+}
+
 export function reduceHistoryActions(state, action) {
   switch (action.type) {
     case "PUSH_HISTORY": {
@@ -9,6 +47,8 @@ export function reduceHistoryActions(state, action) {
         label,
         state.adjustments[imageId] || defaultAdjustments,
         state.crop[imageId],
+        null, // only destructive ops store originalData
+        getCurrentMasks(state, imageId),
       );
       const { entries, index } = pushHistory(
         state.history[imageId] || [],
@@ -28,7 +68,7 @@ export function reduceHistoryActions(state, action) {
       if (idx <= 0) return state;
       const prevIdx = idx - 1;
       const entry = state.history[imageId][prevIdx];
-      const imageUpdate = entry.originalData
+      const imageDataUpdate = entry.originalData
         ? {
             images: state.images.map((img) =>
               img.id === imageId
@@ -42,9 +82,26 @@ export function reduceHistoryActions(state, action) {
             ),
           }
         : {};
+      // Restore masks from the entry
+      const maskUpdate = entry.masks ? restoreMasksFromEntry(state, imageId, entry) : {};
+      // If both imageDataUpdate and maskUpdate touch `images`, merge them
+      let mergedImages = state.images;
+      if (imageDataUpdate.images && maskUpdate.images) {
+        mergedImages = state.images.map((img) => {
+          if (img.id !== imageId) return img;
+          const fromData = imageDataUpdate.images.find((i) => i.id === imageId) || img;
+          const fromMask = maskUpdate.images.find((i) => i.id === imageId) || img;
+          return { ...fromData, masks: fromMask.masks, activeMaskId: fromMask.activeMaskId };
+        });
+      } else if (imageDataUpdate.images) {
+        mergedImages = imageDataUpdate.images;
+      } else if (maskUpdate.images) {
+        mergedImages = maskUpdate.images;
+      }
+
       return {
         ...state,
-        ...imageUpdate,
+        images: mergedImages,
         adjustments: {
           ...state.adjustments,
           [imageId]: { ...entry.adjustments },
@@ -64,7 +121,7 @@ export function reduceHistoryActions(state, action) {
       const nextIdx = idx + 1;
       const entry = entries[nextIdx];
       const postOperationData = entry.postRotateData || entry.postCropData;
-      const imageUpdate = postOperationData
+      const imageDataUpdate = postOperationData
         ? {
             images: state.images.map((img) =>
               img.id === imageId
@@ -78,9 +135,24 @@ export function reduceHistoryActions(state, action) {
             ),
           }
         : {};
+      const maskUpdate = entry.masks ? restoreMasksFromEntry(state, imageId, entry) : {};
+      let mergedImages = state.images;
+      if (imageDataUpdate.images && maskUpdate.images) {
+        mergedImages = state.images.map((img) => {
+          if (img.id !== imageId) return img;
+          const fromData = imageDataUpdate.images.find((i) => i.id === imageId) || img;
+          const fromMask = maskUpdate.images.find((i) => i.id === imageId) || img;
+          return { ...fromData, masks: fromMask.masks, activeMaskId: fromMask.activeMaskId };
+        });
+      } else if (imageDataUpdate.images) {
+        mergedImages = imageDataUpdate.images;
+      } else if (maskUpdate.images) {
+        mergedImages = maskUpdate.images;
+      }
+
       return {
         ...state,
-        ...imageUpdate,
+        images: mergedImages,
         adjustments: {
           ...state.adjustments,
           [imageId]: { ...entry.adjustments },
@@ -97,8 +169,49 @@ export function reduceHistoryActions(state, action) {
       const entries = state.history[imageId] || [];
       if (index < 0 || index >= entries.length) return state;
       const entry = entries[index];
+
+      // Check if we need to restore pixel data.
+      // Walk forward from entry 0 to `index` to find the latest pixel data snapshot.
+      let pixelData = null;
+      for (let i = index; i >= 0; i--) {
+        const e = entries[i];
+        if (e.postRotateData || e.postCropData) {
+          pixelData = e.postRotateData || e.postCropData;
+          break;
+        }
+        if (e.originalData) {
+          pixelData = e.originalData;
+          break;
+        }
+      }
+
+      const imageDataUpdate = pixelData
+        ? {
+            images: state.images.map((img) =>
+              img.id === imageId
+                ? { ...img, originalData: pixelData, width: pixelData.width, height: pixelData.height }
+                : img,
+            ),
+          }
+        : {};
+      const maskUpdate = entry.masks ? restoreMasksFromEntry(state, imageId, entry) : {};
+      let mergedImages = state.images;
+      if (imageDataUpdate.images && maskUpdate.images) {
+        mergedImages = state.images.map((img) => {
+          if (img.id !== imageId) return img;
+          const fromData = imageDataUpdate.images.find((i) => i.id === imageId) || img;
+          const fromMask = maskUpdate.images.find((i) => i.id === imageId) || img;
+          return { ...fromData, masks: fromMask.masks, activeMaskId: fromMask.activeMaskId };
+        });
+      } else if (imageDataUpdate.images) {
+        mergedImages = imageDataUpdate.images;
+      } else if (maskUpdate.images) {
+        mergedImages = maskUpdate.images;
+      }
+
       return {
         ...state,
+        images: mergedImages,
         adjustments: {
           ...state.adjustments,
           [imageId]: { ...entry.adjustments },
@@ -127,6 +240,7 @@ export function reduceHistoryActions(state, action) {
         state.adjustments[imageId] || defaultAdjustments,
         crop,
         preCropData || null,
+        getCurrentMasks(state, imageId),
       );
       const { entries, index } = pushHistory(
         state.history[imageId] || [],
@@ -150,6 +264,7 @@ export function reduceHistoryActions(state, action) {
         state.adjustments[imageId] || defaultAdjustments,
         state.crop[imageId],
         preRotateImage?.originalData || null,
+        getCurrentMasks(state, imageId),
       );
       const { entries, index } = pushHistory(
         state.history[imageId] || [],

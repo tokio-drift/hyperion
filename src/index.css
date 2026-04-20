@@ -64,41 +64,48 @@ input[type="range"] {
   background: transparent;
   cursor: pointer;
   width: 100%;
+  height: 20px;
 }
 
 input[type="range"]::-webkit-slider-track {
-  background: #3a3a3a;
-  height: 3px;
-  border-radius: 2px;
+  background: #2a2a2a;
+  height: 6px;
+  border-radius: 3px;
+  border: 1px solid #3a3a3a;
 }
 
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  background: var(--accent);
-  margin-top: -5.5px;
-  transition: transform 0.1s;
+  background: white;
+  border: 2px solid var(--accent);
+  margin-top: -6px;
+  transition: transform 0.1s, box-shadow 0.15s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
 }
 
 input[type="range"]::-webkit-slider-thumb:hover {
-  transform: scale(1.2);
+  transform: scale(1.15);
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.25), 0 1px 4px rgba(0,0,0,0.4);
 }
 
 input[type="range"]::-moz-range-track {
-  background: #3a3a3a;
-  height: 3px;
-  border-radius: 2px;
+  background: #2a2a2a;
+  height: 6px;
+  border-radius: 3px;
+  border: 1px solid #3a3a3a;
 }
 
 input[type="range"]::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  background: var(--accent);
-  border: none;
+  background: white;
+  border: 2px solid var(--accent);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
 }
 
 /* Utility classes */
@@ -164,12 +171,28 @@ input[type="range"]::-moz-range-thumb {
 
 /* Filled slider track - shows distance from zero */
 input[type="range"].slider-filled::-webkit-slider-track {
-  background: var(--track-fill, #3a3a3a);
-  height: 3px;
-  border-radius: 2px;
+  background: var(--track-fill, #2a2a2a);
+  height: 6px;
+  border-radius: 3px;
+  border: 1px solid #3a3a3a;
 }
 input[type="range"].slider-filled::-moz-range-track {
-  background: var(--track-fill, #3a3a3a);
-  height: 3px;
-  border-radius: 2px;
+  background: var(--track-fill, #2a2a2a);
+  height: 6px;
+  border-radius: 3px;
+  border: 1px solid #3a3a3a;
+}
+
+/* Gradient slider track - for temperature, tint, etc. */
+input[type="range"].slider-gradient::-webkit-slider-track {
+  background: var(--track-gradient, #2a2a2a);
+  height: 6px;
+  border-radius: 3px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+input[type="range"].slider-gradient::-moz-range-track {
+  background: var(--track-gradient, #2a2a2a);
+  height: 6px;
+  border-radius: 3px;
+  border: 1px solid rgba(255,255,255,0.08);
 }

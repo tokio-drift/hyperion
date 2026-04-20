@@ -34,6 +34,7 @@ export function reduceImageActions(state, action) {
               defaultAdjustments,
               initialCrop,
               img.originalData || null,
+              img.masks || [],
             ),
           ];
           histIdx[img.id] = 0;

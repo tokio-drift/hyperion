@@ -11,6 +11,10 @@ export const defaultAdjustments = {
   vibrance: 0,
   temperature: 0,
   tint: 0,
+  vignetteAmount: 0,
+  vignetteMidpoint: 50,
+  vignetteRoundness: 0,
+  vignetteFeather: 50,
 };
 
 export const initialState = {

@@ -132,6 +132,11 @@ export default function DimensionPanel() {
         type: "ROTATE_IMAGE",
         payload: { imageId: activeImage.id, direction },
       });
+      // Rotate all mask data to match the new image orientation
+      dispatch({
+        type: "ROTATE_MASKS",
+        payload: { imageId: activeImage.id, direction },
+      });
       push(direction === "cw" ? "Rotate 90° CW" : "Rotate 90° CCW");
     },
     [activeImage, rotateImage, dispatch, push],

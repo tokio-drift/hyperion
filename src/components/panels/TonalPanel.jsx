@@ -50,6 +50,13 @@ function useDebouncedHistoryPush(push, delay = 600) {
   }, [push, delay]);
 }
 
+const VIGNETTE_CONTROLS = [
+  { key: 'vignetteAmount',    label: 'Amount',    min: -100, max: 100, tooltip: 'Negative darkens edges (black), positive lightens edges (white)' },
+  { key: 'vignetteMidpoint',  label: 'Midpoint',  min: 0,    max: 100, tooltip: 'Controls how far the vignette reaches into the image center' },
+  { key: 'vignetteRoundness', label: 'Roundness', min: -100, max: 100, tooltip: 'Negative makes the vignette more rectangular, positive makes it more circular' },
+  { key: 'vignetteFeather',   label: 'Feather',   min: 0,    max: 100, tooltip: 'Controls the softness of the vignette edge' },
+];
+
 export default function TonalPanel() {
   const { dispatch, activeImage, activeAdjustments } = useEditor();
   const { push } = useHistory();
@@ -63,7 +70,7 @@ export default function TonalPanel() {
     });
 
     // Push a history entry after a short pause (don't create one per px of drag)
-    const ctrl = CONTROLS.find(c => c.key === key);
+    const ctrl = [...CONTROLS, ...VIGNETTE_CONTROLS].find(c => c.key === key);
     const label = `${ctrl?.label || key} ${value > 0 ? '+' : ''}${value}`;
     debouncedPush(label);
   }, [dispatch, activeImage, debouncedPush]);
@@ -76,6 +83,9 @@ export default function TonalPanel() {
 
   const hasAdjustments = activeImage &&
     CONTROLS.some(c => activeAdjustments[c.key] !== 0);
+
+  const hasVignette = activeImage &&
+    activeAdjustments.vignetteAmount !== 0;
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
@@ -97,19 +107,57 @@ export default function TonalPanel() {
           <p className="text-gray-600 text-sm">Open an image to begin adjusting</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-5 p-4">
-          {CONTROLS.map(ctrl => (
-            <Slider
-              key={ctrl.key}
-              label={ctrl.label}
-              value={activeAdjustments[ctrl.key] ?? 0}
-              min={-100}
-              max={100}
-              onChange={(v) => handleChange(ctrl.key, v)}
-              tooltip={ctrl.tooltip}
-            />
-          ))}
-        </div>
+        <>
+          <div className="flex flex-col gap-5 p-4">
+            {CONTROLS.map(ctrl => (
+              <Slider
+                key={ctrl.key}
+                label={ctrl.label}
+                value={activeAdjustments[ctrl.key] ?? 0}
+                min={-100}
+                max={100}
+                onChange={(v) => handleChange(ctrl.key, v)}
+                tooltip={ctrl.tooltip}
+              />
+            ))}
+          </div>
+
+          {/* ── Vignette Section ── */}
+          <div className="panel-section flex items-center justify-between mt-1">
+            <span className="text-xs font-semibold text-gray-300 uppercase tracking-wider">Vignette</span>
+            {hasVignette && (
+              <button
+                onClick={() => {
+                  VIGNETTE_CONTROLS.forEach(c => {
+                    const defaultVal = c.key === 'vignetteMidpoint' || c.key === 'vignetteFeather' ? 50 : 0;
+                    dispatch({ type: 'UPDATE_ADJUSTMENT', payload: { imageId: activeImage.id, key: c.key, value: defaultVal } });
+                  });
+                  push('Reset vignette');
+                }}
+                className="text-xs text-gray-500 hover:text-blue-400 transition-colors"
+              >
+                Reset
+              </button>
+            )}
+          </div>
+          <div className="flex flex-col gap-5 p-4 pt-2">
+            {VIGNETTE_CONTROLS.map(ctrl => {
+              const defaultVal = (ctrl.key === 'vignetteMidpoint' || ctrl.key === 'vignetteFeather') ? 50 : 0;
+              return (
+                <Slider
+                  key={ctrl.key}
+                  label={ctrl.label}
+                  value={activeAdjustments[ctrl.key] ?? defaultVal}
+                  min={ctrl.min}
+                  max={ctrl.max}
+                  onChange={(v) => handleChange(ctrl.key, v)}
+                  tooltip={ctrl.tooltip}
+                  resetValue={defaultVal}
+                />
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );

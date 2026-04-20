@@ -27,6 +27,9 @@ function ActionIcon({ label }) {
   if (l.includes('rotate'))     icon = '↻';
   if (l.includes('resize'))     icon = '⤡';
   if (l.includes('reset'))      icon = '↺';
+  if (l.includes('mask'))       icon = '🎭';
+  if (l.includes('vignette'))   icon = '⊚';
+  if (l.includes('amount'))     icon = '⊚';
   return <span className="text-xs w-4 text-center flex-shrink-0 opacity-70">{icon}</span>;
 }
 
@@ -69,7 +72,7 @@ export default function HistoryPanel() {
         <span className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
           History
         </span>
-        <span className="text-xs text-gray-600">{entries.length} / 10</span>
+        <span className="text-xs text-gray-600">{entries.length} steps</span>
       </div>
 
       {/* List */}

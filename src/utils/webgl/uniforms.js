@@ -17,6 +17,10 @@ export function getUniformValues(adjustments = {}) {
     hue = 0,
     saturation = 0,
     vibrance = 0,
+    vignetteAmount = 0,
+    vignetteMidpoint = 50,
+    vignetteRoundness = 0,
+    vignetteFeather = 50,
   } = adjustments;
 
   return {
@@ -32,6 +36,10 @@ export function getUniformValues(adjustments = {}) {
     hue,
     saturation,
     vibrance,
+    vignetteAmount,
+    vignetteMidpoint,
+    vignetteRoundness,
+    vignetteFeather,
   };
 }
 
@@ -48,6 +56,10 @@ export function setUniforms(gl, uniforms, values) {
   gl.uniform1f(uniforms.uHue, values.hue);
   gl.uniform1f(uniforms.uSaturation, values.saturation);
   gl.uniform1f(uniforms.uVibrance, values.vibrance);
+  gl.uniform1f(uniforms.uVignetteAmount, values.vignetteAmount);
+  gl.uniform1f(uniforms.uVignetteMidpoint, values.vignetteMidpoint);
+  gl.uniform1f(uniforms.uVignetteRoundness, values.vignetteRoundness);
+  gl.uniform1f(uniforms.uVignetteFeather, values.vignetteFeather);
 }
 
 export function setMaskUniforms(gl, uniforms, { useMask, invertMask }) {

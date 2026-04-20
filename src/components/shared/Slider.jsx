@@ -7,6 +7,7 @@ import Tooltip from './Tooltip';
  *   - Double-click resets to 0
  *   - Click on value → inline numeric input
  *   - Tooltip on hover with description
+ *   - Optional gradient track for colored sliders (temperature, tint)
  *
  * Props:
  *   label       {string}
@@ -17,6 +18,8 @@ import Tooltip from './Tooltip';
  *   onChange    {(v: number) => void}
  *   tooltip     {string}  hover description
  *   disabled    {boolean}
+ *   gradient    {string}  CSS gradient for the track (e.g. for temperature/tint)
+ *   resetValue  {number}  value to reset to on double-click (default 0)
  */
 export default function Slider({
   label,
@@ -27,11 +30,13 @@ export default function Slider({
   onChange,
   tooltip,
   disabled = false,
+  gradient,
+  resetValue = 0,
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const inputEditRef = useRef(null);
-  const isNonZero = value !== 0;
+  const isNonZero = value !== resetValue;
 
   // ── Numeric inline edit ────────────────────────────────────────────────
   const startEdit = () => {
@@ -61,17 +66,24 @@ export default function Slider({
 
   // ── Double-click reset ─────────────────────────────────────────────────
   const handleDoubleClick = useCallback(() => {
-    if (!disabled) onChange?.(0);
-  }, [disabled, onChange]);
+    if (!disabled) onChange?.(resetValue);
+  }, [disabled, onChange, resetValue]);
 
-  // Filled-track gradient (shows how far from center or 0)
+  // Filled-track gradient (shows how far from center or zero)
   const pct = ((value - min) / (max - min)) * 100;
-  const zeroPct = ((-min) / (max - min)) * 100;
+  const zeroPct = ((resetValue - min) / (max - min)) * 100;
   const left  = Math.min(pct, zeroPct);
   const right = 100 - Math.max(pct, zeroPct);
   const trackFill = isNonZero
-    ? `linear-gradient(to right, #3a3a3a ${left}%, #3b82f6 ${left}%, #3b82f6 ${100 - right}%, #3a3a3a ${100 - right}%)`
-    : 'linear-gradient(to right, #3a3a3a 0%, #3a3a3a 100%)';
+    ? `linear-gradient(to right, #2a2a2a ${left}%, #3b82f6 ${left}%, #3b82f6 ${100 - right}%, #2a2a2a ${100 - right}%)`
+    : 'linear-gradient(to right, #2a2a2a 0%, #2a2a2a 100%)';
+
+  // Determine CSS class and style for track
+  const useGradient = !!gradient;
+  const sliderClass = useGradient ? 'slider-gradient w-full' : 'slider-filled w-full';
+  const sliderStyle = useGradient
+    ? { '--track-gradient': gradient }
+    : { '--track-fill': trackFill };
 
   return (
     <div className={`flex flex-col gap-1 ${disabled ? 'opacity-40 pointer-events-none' : ''}`}>
@@ -124,8 +136,8 @@ export default function Slider({
           value={value}
           onChange={handleSliderChange}
           disabled={disabled}
-          style={{ '--track-fill': trackFill }}
-          className="slider-filled w-full"
+          style={sliderStyle}
+          className={sliderClass}
         />
       </div>
     </div>

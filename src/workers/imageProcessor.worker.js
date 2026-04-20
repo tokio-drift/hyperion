@@ -94,6 +94,54 @@ function applyBlacks(data, v) {
   }
 }
 
+function applyVignette(data, width, height, vignetteAmount, vignetteMidpoint, vignetteRoundness, vignetteFeather) {
+  if (vignetteAmount === 0) return;
+
+  const cx = width / 2;
+  const cy = height / 2;
+  const maxDim = Math.max(cx, cy);
+  const midpoint = vignetteMidpoint / 100;
+  const feather = Math.max(0.01, vignetteFeather / 100);
+  const roundness = vignetteRoundness / 100;
+  const strength = Math.abs(vignetteAmount) / 100;
+  const isBlack = vignetteAmount < 0;
+
+  const aspectX = cx / maxDim;
+  const aspectY = cy / maxDim;
+  const rx = roundness >= 0 ? aspectX + (1 - aspectX) * roundness : aspectX * (1 + roundness);
+  const ry = roundness >= 0 ? aspectY + (1 - aspectY) * roundness : aspectY * (1 + roundness);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const nx = (x - cx) / (cx * (rx || 0.01));
+      const ny = (y - cy) / (cy * (ry || 0.01));
+      const dist = Math.sqrt(nx * nx + ny * ny);
+
+      const start = midpoint;
+      const end = midpoint + feather;
+      let factor = 0;
+      if (dist > start) {
+        factor = Math.min(1, (dist - start) / (end - start));
+      }
+
+      if (factor <= 0) continue;
+
+      const vigAmount = factor * strength;
+      const idx = (y * width + x) * 4;
+
+      if (isBlack) {
+        data[idx]   = clamp(data[idx]   * (1 - vigAmount));
+        data[idx+1] = clamp(data[idx+1] * (1 - vigAmount));
+        data[idx+2] = clamp(data[idx+2] * (1 - vigAmount));
+      } else {
+        data[idx]   = clamp(data[idx]   + (255 - data[idx])   * vigAmount);
+        data[idx+1] = clamp(data[idx+1] + (255 - data[idx+1]) * vigAmount);
+        data[idx+2] = clamp(data[idx+2] + (255 - data[idx+2]) * vigAmount);
+      }
+    }
+  }
+}
+
 function rotatePixels(data, width, height, direction) {
   const result = new Uint8ClampedArray(width * height * 4);
   const newW = height;
@@ -128,11 +176,12 @@ function cropPixels(data, srcWidth, x, y, cw, ch) {
   return result;
 }
 
-function applyAllAdjustments(buffer, adjustments = {}) {
+function applyAllAdjustments(buffer, width, height, adjustments = {}) {
   const {
     exposure=0, brightness=0, contrast=0,
     highlights=0, shadows=0, whites=0, blacks=0,
     temperature=0, tint=0, hue=0, saturation=0, vibrance=0,
+    vignetteAmount=0, vignetteMidpoint=50, vignetteRoundness=0, vignetteFeather=50,
   } = adjustments;
 
   applyExposure(buffer, exposure);
@@ -145,13 +194,14 @@ function applyAllAdjustments(buffer, adjustments = {}) {
   applyTemperature(buffer, temperature);
   applyTint(buffer, tint);
   applyColourGroup(buffer, hue, saturation, vibrance);
+  applyVignette(buffer, width, height, vignetteAmount, vignetteMidpoint, vignetteRoundness, vignetteFeather);
 }
 
 function hasNonZeroAdjustments(adjustments = {}) {
   return Object.values(adjustments).some((v) => v !== 0);
 }
 
-function blendMasksIntoBuffer(buffer, masks) {
+function blendMasksIntoBuffer(buffer, width, height, masks) {
   if (!Array.isArray(masks) || masks.length === 0) return;
 
   for (const mask of masks) {
@@ -165,7 +215,7 @@ function blendMasksIntoBuffer(buffer, masks) {
     if (!hasPaintedPixels && !mask.inverted) continue;
 
     const scratchBuffer = new Uint8ClampedArray(buffer);
-    applyAllAdjustments(scratchBuffer, mAdj);
+    applyAllAdjustments(scratchBuffer, width, height, mAdj);
 
     for (let i = 0; i < buffer.length; i += 4) {
       const pixelIdx = i / 4;
@@ -196,8 +246,8 @@ self.onmessage = function (e) {
       const { id, pixelData, width, height, adjustments, masks } = msg;
       const buffer = new Uint8ClampedArray(pixelData);
 
-      applyAllAdjustments(buffer, adjustments);
-      blendMasksIntoBuffer(buffer, masks);
+      applyAllAdjustments(buffer, width, height, adjustments);
+      blendMasksIntoBuffer(buffer, width, height, masks);
 
       self.postMessage(
         { type: 'DONE', id, pixelData: buffer.buffer, width, height },
@@ -205,11 +255,12 @@ self.onmessage = function (e) {
       );
 
     } else if (msg.type === 'PROCESS_CHUNK') {
-      const { id, chunkIndex, pixelData, adjustments, masks } = msg;
+      const { id, chunkIndex, pixelData, adjustments, masks, chunkWidth, chunkHeight } = msg;
       const buffer = new Uint8ClampedArray(pixelData);
+      const w = chunkWidth || (buffer.length / 4 / (chunkHeight || 1));
 
-      applyAllAdjustments(buffer, adjustments);
-      blendMasksIntoBuffer(buffer, masks);
+      applyAllAdjustments(buffer, w, chunkHeight || (buffer.length / 4 / w), adjustments);
+      blendMasksIntoBuffer(buffer, w, chunkHeight || (buffer.length / 4 / w), masks);
 
       self.postMessage(
         {

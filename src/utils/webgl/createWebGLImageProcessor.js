@@ -111,6 +111,11 @@ export function createWebGLImageProcessor() {
     uMaskTexture: gl.getUniformLocation(program, "uMaskTexture"),
     uUseMask: gl.getUniformLocation(program, "uUseMask"),
     uInvertMask: gl.getUniformLocation(program, "uInvertMask"),
+    uVignetteAmount: gl.getUniformLocation(program, "uVignetteAmount"),
+    uVignetteMidpoint: gl.getUniformLocation(program, "uVignetteMidpoint"),
+    uVignetteRoundness: gl.getUniformLocation(program, "uVignetteRoundness"),
+    uVignetteFeather: gl.getUniformLocation(program, "uVignetteFeather"),
+    uImageSize: gl.getUniformLocation(program, "uImageSize"),
   };
 
   gl.uniform1i(uniforms.uTexture, 0);
@@ -202,6 +207,7 @@ export function createWebGLImageProcessor() {
 
     const values = getUniformValues(adjustments);
     setUniforms(gl, uniforms, values);
+    gl.uniform2f(uniforms.uImageSize, width, height);
 
     if (mask) {
       uploadMask(width, height, mask.maskData);

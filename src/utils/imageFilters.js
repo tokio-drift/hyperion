@@ -149,12 +149,63 @@ export function applyColourGroup(data, hue, saturation, vibrance) {
     data[i + 2] = rgb.b;
   }
 }
+export function applyVignette(data, width, height, vignetteAmount, vignetteMidpoint, vignetteRoundness, vignetteFeather) {
+  if (vignetteAmount === 0) return;
+
+  const cx = width / 2;
+  const cy = height / 2;
+  const maxDim = Math.max(cx, cy);
+  const midpoint = vignetteMidpoint / 100; // 0-1 range
+  const feather = Math.max(0.01, vignetteFeather / 100); // avoid div-by-zero
+  const roundness = vignetteRoundness / 100; // -1 to 1
+  const strength = Math.abs(vignetteAmount) / 100;
+  const isBlack = vignetteAmount < 0;
+
+  // Roundness controls aspect ratio of the vignette ellipse
+  // 0 = follows image aspect, positive = more circular, negative = more rectangular
+  const aspectX = cx / maxDim;
+  const aspectY = cy / maxDim;
+  const rx = roundness >= 0 ? aspectX + (1 - aspectX) * roundness : aspectX * (1 + roundness);
+  const ry = roundness >= 0 ? aspectY + (1 - aspectY) * roundness : aspectY * (1 + roundness);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const nx = (x - cx) / (cx * (rx || 0.01));
+      const ny = (y - cy) / (cy * (ry || 0.01));
+      const dist = Math.sqrt(nx * nx + ny * ny);
+
+      // Vignette starts at midpoint, full effect at midpoint + feather
+      const start = midpoint;
+      const end = midpoint + feather;
+      let factor = 0;
+      if (dist > start) {
+        factor = Math.min(1, (dist - start) / (end - start));
+      }
+
+      if (factor <= 0) continue;
+
+      const vigAmount = factor * strength;
+      const idx = (y * width + x) * 4;
+
+      if (isBlack) {
+        data[idx]     = clamp(data[idx]     * (1 - vigAmount));
+        data[idx + 1] = clamp(data[idx + 1] * (1 - vigAmount));
+        data[idx + 2] = clamp(data[idx + 2] * (1 - vigAmount));
+      } else {
+        data[idx]     = clamp(data[idx]     + (255 - data[idx])     * vigAmount);
+        data[idx + 1] = clamp(data[idx + 1] + (255 - data[idx + 1]) * vigAmount);
+        data[idx + 2] = clamp(data[idx + 2] + (255 - data[idx + 2]) * vigAmount);
+      }
+    }
+  }
+}
 
 export function applyAllAdjustments(originalData, adjustments) {
   const {
     exposure = 0, brightness = 0, contrast = 0,
     highlights = 0, shadows = 0, whites = 0, blacks = 0,
-    temperature = 0, tint = 0, hue = 0, saturation = 0, vibrance = 0
+    temperature = 0, tint = 0, hue = 0, saturation = 0, vibrance = 0,
+    vignetteAmount = 0, vignetteMidpoint = 50, vignetteRoundness = 0, vignetteFeather = 50,
   } = adjustments;
 
   const buffer = new Uint8ClampedArray(originalData.data);
@@ -169,6 +220,7 @@ export function applyAllAdjustments(originalData, adjustments) {
   applyTemperature(buffer, temperature);
   applyTint(buffer, tint);
   applyColourGroup(buffer, hue, saturation, vibrance);
+  applyVignette(buffer, originalData.width, originalData.height, vignetteAmount, vignetteMidpoint, vignetteRoundness, vignetteFeather);
 
   return new ImageData(buffer, originalData.width, originalData.height);
 }
