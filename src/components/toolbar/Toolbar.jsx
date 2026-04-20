@@ -1,5 +1,3 @@
-// src/components/toolbar/Toolbar.jsx
-
 import React, { useRef, useEffect } from 'react';
 import { useEditor } from '../../context/EditorContext';
 import Tooltip from '../shared/Tooltip';
@@ -90,6 +88,17 @@ export default function Toolbar() {
       >
         <svg {...ip}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
         <span className="text-xs hidden sm:inline">Close</span>
+      </TBtn>
+
+      <Divider />
+
+      <TBtn
+        onClick={() => dispatch({ type: 'TOGGLE_GALLERY' })}
+        tooltip="Gallery View"
+        active={state.ui.galleryOpen}
+      >
+        <svg {...ip}><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+        <span className="text-xs hidden sm:inline">Gallery</span>
       </TBtn>
 
       <Divider />

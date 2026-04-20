@@ -1,26 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 import Tooltip from './Tooltip';
 
-/**
- * Slider — labeled range input with:
- *   - Label on left, numeric value on right (accent colored when non-zero)
- *   - Double-click resets to 0
- *   - Click on value → inline numeric input
- *   - Tooltip on hover with description
- *   - Optional gradient track for colored sliders (temperature, tint)
- *
- * Props:
- *   label       {string}
- *   value       {number}
- *   min         {number}  default -100
- *   max         {number}  default 100
- *   step        {number}  default 1
- *   onChange    {(v: number) => void}
- *   tooltip     {string}  hover description
- *   disabled    {boolean}
- *   gradient    {string}  CSS gradient for the track (e.g. for temperature/tint)
- *   resetValue  {number}  value to reset to on double-click (default 0)
- */
 export default function Slider({
   label,
   value = 0,
@@ -38,7 +18,6 @@ export default function Slider({
   const inputEditRef = useRef(null);
   const isNonZero = value !== resetValue;
 
-  // ── Numeric inline edit ────────────────────────────────────────────────
   const startEdit = () => {
     if (disabled) return;
     setDraft(String(value));
@@ -59,35 +38,36 @@ export default function Slider({
     if (e.key === 'Escape') setEditing(false);
   };
 
-  // ── Slider change ──────────────────────────────────────────────────────
   const handleSliderChange = useCallback((e) => {
     onChange?.(Number(e.target.value));
   }, [onChange]);
 
-  // ── Double-click reset ─────────────────────────────────────────────────
   const handleDoubleClick = useCallback(() => {
     if (!disabled) onChange?.(resetValue);
   }, [disabled, onChange, resetValue]);
 
-  // Filled-track gradient (shows how far from center or zero)
+  // Calculate fill percentages for Standard Sliders
   const pct = ((value - min) / (max - min)) * 100;
   const zeroPct = ((resetValue - min) / (max - min)) * 100;
   const left  = Math.min(pct, zeroPct);
-  const right = 100 - Math.max(pct, zeroPct);
-  const trackFill = isNonZero
-    ? `linear-gradient(to right, #2a2a2a ${left}%, #3b82f6 ${left}%, #3b82f6 ${100 - right}%, #2a2a2a ${100 - right}%)`
-    : 'linear-gradient(to right, #2a2a2a 0%, #2a2a2a 100%)';
+  const right = Math.max(pct, zeroPct);
 
-  // Determine CSS class and style for track
-  const useGradient = !!gradient;
-  const sliderClass = useGradient ? 'slider-gradient w-full' : 'slider-filled w-full';
-  const sliderStyle = useGradient
-    ? { '--track-gradient': gradient }
-    : { '--track-fill': trackFill };
+  const emptyColor = '#404040'; // Dark gray background line
+  const fillColor = '#a3a3a3';  // Light gray filled line
+
+  // Build the inline background fill
+  let trackBackground;
+  if (gradient) {
+    trackBackground = gradient; // Uses the full gradient passed from ColourPanel
+  } else if (isNonZero) {
+    // Fill from the center/0 to the current thumb position
+    trackBackground = `linear-gradient(to right, ${emptyColor} ${left}%, ${fillColor} ${left}%, ${fillColor} ${right}%, ${emptyColor} ${right}%)`;
+  } else {
+    trackBackground = emptyColor;
+  }
 
   return (
     <div className={`flex flex-col gap-1 ${disabled ? 'opacity-40 pointer-events-none' : ''}`}>
-      {/* Label row */}
       <div className="flex items-center justify-between">
         <Tooltip content={tooltip} side="left">
           <span className="text-gray-400 text-xs select-none cursor-default">{label}</span>
@@ -126,8 +106,7 @@ export default function Slider({
         )}
       </div>
 
-      {/* Track */}
-      <div onDoubleClick={handleDoubleClick} className="relative">
+      <div onDoubleClick={handleDoubleClick} className="relative flex items-center h-5">
         <input
           type="range"
           min={min}
@@ -136,8 +115,8 @@ export default function Slider({
           value={value}
           onChange={handleSliderChange}
           disabled={disabled}
-          style={sliderStyle}
-          className={sliderClass}
+          style={{ background: trackBackground }}
+          className="w-full"
         />
       </div>
     </div>

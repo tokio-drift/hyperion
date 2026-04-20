@@ -4,9 +4,6 @@ import { validateFiles } from '../../utils/formatValidation';
 
 const ACCEPTED = '.jpg,.jpeg,.png,.webp,.gif,.bmp';
 
-/**
- * Extract ImageData from a File using createImageBitmap + OffscreenCanvas.
- */
 async function fileToImageData(file) {
   const bitmap = await createImageBitmap(file);
   const { width, height } = bitmap;
@@ -41,7 +38,6 @@ export default function UploadZone({ children, overlayMode = false }) {
 
     const { valid, errors } = validateFiles(Array.from(files));
 
-    // Show errors
     for (const error of errors) {
       showToast(error, 'error');
     }
@@ -82,7 +78,7 @@ export default function UploadZone({ children, overlayMode = false }) {
 
   const handleFileInput = useCallback((e) => {
     processFiles(e.target.files);
-    e.target.value = ''; // allow re-upload of same file
+    e.target.value = '';
   }, [processFiles]);
 
   const handleDrop = useCallback((e) => {
@@ -108,13 +104,15 @@ export default function UploadZone({ children, overlayMode = false }) {
     inputRef.current?.click();
   }, []);
 
-  // Expose openFilePicker globally so Toolbar can call it
   React.useEffect(() => {
     window.__hyperionOpenFilePicker = openFilePicker;
-    return () => { delete window.__hyperionOpenFilePicker; };
+    return () => {
+      if (window.__hyperionOpenFilePicker === openFilePicker) {
+        delete window.__hyperionOpenFilePicker;
+      }
+    };
   }, [openFilePicker]);
 
-  // Overlay mode: transparent drop-target over the canvas area when images are loaded
   if (overlayMode) {
     return (
       <div
@@ -144,7 +142,6 @@ export default function UploadZone({ children, overlayMode = false }) {
     );
   }
 
-  // Default mode: full upload zone shown when no images are loaded
   return (
     <div
       className={`

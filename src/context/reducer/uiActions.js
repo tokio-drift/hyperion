@@ -18,6 +18,9 @@ export function reduceUiActions(state, action) {
     case "CLOSE_EXPORT_MODAL":
       return { ...state, ui: { ...state.ui, exportModalOpen: false } };
 
+    case "TOGGLE_GALLERY":
+      return { ...state, ui: { ...state.ui, galleryOpen: action.payload ?? !state.ui.galleryOpen } };
+
     case "ADD_TOAST": {
       const toast = {
         id: action.payload.id || `${Date.now()}`,

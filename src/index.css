@@ -61,17 +61,19 @@ body {
 input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
-  background: transparent;
-  cursor: pointer;
   width: 100%;
-  height: 20px;
+  height: 2px; /* The track thickness */
+  border-radius: 1px;
+  outline: none;
+  cursor: pointer;
+  background: #404040; /* Fallback empty color */
 }
 
 input[type="range"]::-webkit-slider-track {
-  background: #2a2a2a;
-  height: 6px;
-  border-radius: 3px;
-  border: 1px solid #3a3a3a;
+  width: 100%;
+  height: 2px;
+  background: transparent; /* Handled by input inline background */
+  border: none;
 }
 
 input[type="range"]::-webkit-slider-thumb {
@@ -80,119 +82,38 @@ input[type="range"]::-webkit-slider-thumb {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: white;
-  border: 2px solid var(--accent);
-  margin-top: -6px;
-  transition: transform 0.1s, box-shadow 0.15s;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  background: #242424; /* Matches panel background */
+  border: 2px solid #a3a3a3;
+  margin-top: -7px; /* Center thumb on 2px track: (2 - 16)/2 = -7 */
+  transition: transform 0.1s, border-color 0.1s;
+  /* Fakes a gap to hide the track underneath the hollow thumb */
+  box-shadow: 0 0 0 4px #242424;
 }
 
 input[type="range"]::-webkit-slider-thumb:hover {
   transform: scale(1.15);
-  box-shadow: 0 0 0 3px rgba(59,130,246,0.25), 0 1px 4px rgba(0,0,0,0.4);
+  border-color: #ffffff;
 }
 
 input[type="range"]::-moz-range-track {
-  background: #2a2a2a;
-  height: 6px;
-  border-radius: 3px;
-  border: 1px solid #3a3a3a;
+  width: 100%;
+  height: 2px;
+  border: none;
+  border-radius: 1px;
+  background: transparent;
 }
 
 input[type="range"]::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  background: white;
-  border: 2px solid var(--accent);
-  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  background: #242424;
+  border: 2px solid #a3a3a3;
+  box-shadow: 0 0 0 4px #242424;
+  transition: transform 0.1s, border-color 0.1s;
 }
 
-/* Utility classes */
-.panel-section {
-  border-bottom: 1px solid #333333;
-  padding: 12px 16px;
-}
-
-.badge {
-  font-family: 'DM Mono', monospace;
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-/* Toast animations */
-@keyframes slideIn {
-  from { transform: translateY(100%); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
-
-@keyframes slideOut {
-  from { transform: translateY(0); opacity: 1; }
-  to { transform: translateY(100%); opacity: 0; }
-}
-
-.toast-enter {
-  animation: slideIn 0.2s ease-out forwards;
-}
-
-.toast-exit {
-  animation: slideOut 0.2s ease-in forwards;
-}
-
-/* Compare badge pulse */
-@keyframes badgePulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
-}
-
-.compare-badge {
-  animation: badgePulse 2s ease-in-out infinite;
-}
-
-/* Crop overlay */
-.crop-overlay {
-  position: absolute;
-  border: 2px solid rgba(255,255,255,0.9);
-  box-shadow: 0 0 0 9999px rgba(0,0,0,0.55);
-  pointer-events: none;
-}
-
-.crop-handle {
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  background: white;
-  border-radius: 1px;
-  pointer-events: all;
-  cursor: nwse-resize;
-}
-
-/* Filled slider track - shows distance from zero */
-input[type="range"].slider-filled::-webkit-slider-track {
-  background: var(--track-fill, #2a2a2a);
-  height: 6px;
-  border-radius: 3px;
-  border: 1px solid #3a3a3a;
-}
-input[type="range"].slider-filled::-moz-range-track {
-  background: var(--track-fill, #2a2a2a);
-  height: 6px;
-  border-radius: 3px;
-  border: 1px solid #3a3a3a;
-}
-
-/* Gradient slider track - for temperature, tint, etc. */
-input[type="range"].slider-gradient::-webkit-slider-track {
-  background: var(--track-gradient, #2a2a2a);
-  height: 6px;
-  border-radius: 3px;
-  border: 1px solid rgba(255,255,255,0.08);
-}
-input[type="range"].slider-gradient::-moz-range-track {
-  background: var(--track-gradient, #2a2a2a);
-  height: 6px;
-  border-radius: 3px;
-  border: 1px solid rgba(255,255,255,0.08);
+input[type="range"]::-moz-range-thumb:hover {
+  transform: scale(1.15);
+  border-color: #ffffff;
 }

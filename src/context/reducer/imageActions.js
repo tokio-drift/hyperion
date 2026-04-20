@@ -1,5 +1,3 @@
-// src/context/reducer/imageActions.js
-
 import { defaultAdjustments } from "./constants";
 import { makeEntry } from "../../utils/historyUtils";
 
@@ -51,6 +49,7 @@ export function reduceImageActions(state, action) {
         crop,
         history: hist,
         historyIndex: histIdx,
+        ui: { ...state.ui, galleryOpen: false },
       };
     }
 

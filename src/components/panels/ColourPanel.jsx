@@ -79,7 +79,7 @@ export default function ColourPanel() {
               min={-100} max={100}
               onChange={(v) => handleChange('temperature', v)}
               tooltip="Shifts colour balance warm (positive) or cool (negative)"
-              gradient="linear-gradient(to right, #60a5fa, #fbbf24, #f59e0b)"
+              gradient="linear-gradient(to right, #5b5ce6, #737373, #d9b838)"
             />
             <Slider
               label="Tint"
@@ -87,7 +87,7 @@ export default function ColourPanel() {
               min={-100} max={100}
               onChange={(v) => handleChange('tint', v)}
               tooltip="Corrects green (negative) or magenta (positive) cast"
-              gradient="linear-gradient(to right, #4ade80, #d4d4d4, #e879f9)"
+              gradient="linear-gradient(to right, #48b859, #737373, #b848b3)"
             />
           </div>
         </div>
@@ -107,18 +107,20 @@ export default function ColourPanel() {
               gradient="linear-gradient(to right, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)"
             />
             <Slider
-              label="Saturation"
-              value={activeAdjustments.saturation}
-              min={-100} max={100}
-              onChange={(v) => handleChange('saturation', v)}
-              tooltip="Controls overall colour intensity. -100 produces greyscale."
-            />
-            <Slider
               label="Vibrance"
               value={activeAdjustments.vibrance}
               min={-100} max={100}
               onChange={(v) => handleChange('vibrance', v)}
               tooltip="Boosts muted colours more than vivid ones. Skin-tone safe."
+              gradient="linear-gradient(to right, #525252, #a3a3a3, #eab308, #ef4444)"
+            />
+            <Slider
+              label="Saturation"
+              value={activeAdjustments.saturation}
+              min={-100} max={100}
+              onChange={(v) => handleChange('saturation', v)}
+              tooltip="Controls overall colour intensity. -100 produces greyscale."
+              gradient="linear-gradient(to right, #525252, #a3a3a3, #3b82f6, #ef4444)"
             />
           </div>
         </div>

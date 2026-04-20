@@ -16,7 +16,6 @@ export const defaultAdjustments = {
   vignetteRoundness: 0,
   vignetteFeather: 50,
 };
-
 export const initialState = {
   images: [],
   activeImageId: null,
@@ -29,6 +28,7 @@ export const initialState = {
     sidePanelOpen: true,
     activePanelTab: "tonal",
     exportModalOpen: false,
+    galleryOpen: false, 
   },
   toasts: [],
   maskMode: false,

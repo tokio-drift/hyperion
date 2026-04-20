@@ -6,6 +6,8 @@ import EditorCanvas from './components/canvas/EditorCanvas';
 import SidePanel from './components/panels/SidePanel';
 import ExportModal from './components/export/ExportModal';
 import ToastStack from './components/shared/ToastStack';
+import GalleryView from './components/gallery/GalleryView';
+import UploadZone from './components/upload/UploadZone';
 import { saveSession, loadSession, clearSession } from './utils/sessionStorage';
 
 const LEGACY_SESSION_KEY = 'hyperion_session';
@@ -13,10 +15,8 @@ const LEGACY_SESSION_KEY = 'hyperion_session';
 export default function App() {
   const { state, dispatch, showToast } = useEditor();
 
-  // ── Keyboard shortcuts ────────────────────────────────────────────────────
   useKeyboardShortcuts();
 
-  // ── Auto-save to IndexedDB (debounced to avoid heavy writes during drags) ──
   const saveTimerRef = useRef(null);
   const hydrationDoneRef = useRef(false);
 
@@ -35,7 +35,6 @@ export default function App() {
 
           await saveSession(state);
 
-          // Clean up old metadata-only localStorage session once IndexedDB persistence is active.
           try {
             localStorage.removeItem(LEGACY_SESSION_KEY);
           } catch {
@@ -59,7 +58,6 @@ export default function App() {
     state.ui.activePanelTab,
   ]);
 
-  // ── Restore full session on first load ────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
 
@@ -104,12 +102,23 @@ export default function App() {
     <div className="flex flex-col h-screen overflow-hidden" style={{ background: '#111' }}>
       <Toolbar />
 
-      <div className="flex flex-1 overflow-hidden">
-        <EditorCanvas />
-        <SidePanel />
+      <div className="flex flex-1 overflow-hidden relative">
+        <div className="flex flex-1 w-full h-full" style={{ display: state.ui.galleryOpen ? 'none' : 'flex' }}>
+          <EditorCanvas />
+          <SidePanel />
+        </div>
+
+        {state.ui.galleryOpen && (
+          <div className="absolute inset-0 w-full h-full flex z-10 bg-[#111]">
+            <GalleryView />
+          </div>
+        )}
+
+        {/* Global dropzone that won't get blocked by display:none when switching views */}
+        {state.images.length > 0 && <UploadZone overlayMode />}
       </div>
 
-      {state.images.length > 1 && <Filmstrip />}
+      {state.images.length > 1 && !state.ui.galleryOpen && <Filmstrip />}
 
       <ExportModal />
       <ToastStack />
@@ -117,7 +126,6 @@ export default function App() {
   );
 }
 
-// ── Filmstrip ─────────────────────────────────────────────────────────────────
 function Filmstrip() {
   const { state, dispatch } = useEditor();
 
@@ -144,17 +152,34 @@ function FilmThumb({ image, isActive, onClick }) {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !image.originalData) return;
+    
     const src = image.originalData;
-    const scale = Math.min(52 / src.width, 48 / src.height);
-    const w = Math.max(1, Math.round(src.width * scale));
-    const h = Math.max(1, Math.round(src.height * scale));
+    const scale = Math.min(52 / (src.width || 1), 48 / (src.height || 1));
+    const w = Math.max(1, Math.round((src.width || 1) * scale));
+    const h = Math.max(1, Math.round((src.height || 1) * scale));
+    
     canvas.width = w;
     canvas.height = h;
-    const temp = document.createElement('canvas');
-    temp.width = src.width;
-    temp.height = src.height;
-    temp.getContext('2d').putImageData(src, 0, 0);
-    canvas.getContext('2d').drawImage(temp, 0, 0, w, h);
+    const ctx = canvas.getContext('2d');
+    
+    try {
+      let drawable = src;
+      if (src.data && !(src instanceof ImageData)) {
+        drawable = new ImageData(new Uint8ClampedArray(src.data), src.width, src.height);
+      }
+
+      if (drawable instanceof ImageData) {
+        const temp = document.createElement('canvas');
+        temp.width = drawable.width;
+        temp.height = drawable.height;
+        temp.getContext('2d').putImageData(drawable, 0, 0);
+        ctx.drawImage(temp, 0, 0, w, h);
+      } else {
+        ctx.drawImage(drawable, 0, 0, w, h);
+      }
+    } catch (err) {
+      console.warn('Failed to render filmstrip thumbnail:', err);
+    }
   }, [image.originalData]);
 
   return (

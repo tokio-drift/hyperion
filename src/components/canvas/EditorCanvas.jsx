@@ -8,15 +8,13 @@ import { useCanvasInteractions } from "../../hooks/useCanvasInteractions";
 import { useCanvasProcessing } from "../../hooks/useCanvasProcessing";
 
 export default function EditorCanvas() {
-  const { state, dispatch, activeImage, activeAdjustments, activeCrop } =
-    useEditor();
+  const { state, dispatch, activeImage, activeAdjustments, activeCrop } = useEditor();
   const { compareMode } = state;
 
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
 
-  const { canvasRef, containerRef, getTransform, processingBackend } =
-    useCanvasProcessing({
+  const { canvasRef, containerRef, getTransform, processingBackend } = useCanvasProcessing({
     activeImage,
     activeAdjustments,
     activeCrop,
@@ -26,7 +24,7 @@ export default function EditorCanvas() {
     pan,
     setZoom,
     setPan,
-    });
+  });
 
   const {
     cursorStyle,
@@ -45,12 +43,11 @@ export default function EditorCanvas() {
     setZoom,
   });
 
-  const { activeMaskRef, handleStrokeStart, handleStrokeMove, handleStrokeEnd } =
-    useMaskStrokeHandlers({
-      activeImage,
-      brushSettings: state.brushSettings,
-      dispatch,
-    });
+  const { activeMaskRef, handleStrokeStart, handleStrokeMove, handleStrokeEnd } = useMaskStrokeHandlers({
+    activeImage,
+    brushSettings: state.brushSettings,
+    dispatch,
+  });
 
   if (!activeImage) {
     return (
@@ -83,7 +80,6 @@ export default function EditorCanvas() {
           pointerEvents: state.maskMode ? "none" : "auto",
         }}
       />
-      <UploadZone overlayMode />
 
       {compareMode && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 pointer-events-none">
