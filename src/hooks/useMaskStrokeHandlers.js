@@ -1,11 +1,13 @@
 import { useRef, useEffect, useCallback } from "react";
-import { paintStroke, paintStrokeInterpolated } from "../utils/maskUtils";
+import { paintStroke, paintStrokeInterpolated, paintRadialGradient, paintLinearGradient } from "../utils/maskUtils";
 
 export function useMaskStrokeHandlers({ activeImage, brushSettings, dispatch }) {
   const strokeAccumulator = useRef(null);
   const activeMaskRef = useRef(null);
   const lastMaskDispatchRef = useRef(0);
   const lastPointRef = useRef(null);
+  const startPointRef = useRef(null);
+  const originalMaskDataRef = useRef(null);
 
   useEffect(() => {
     if (activeImage?.activeMaskId) {
@@ -16,6 +18,8 @@ export function useMaskStrokeHandlers({ activeImage, brushSettings, dispatch }) 
       activeMaskRef.current = null;
       strokeAccumulator.current = null;
       lastPointRef.current = null;
+      startPointRef.current = null;
+      originalMaskDataRef.current = null;
     }
   }, [activeImage]);
 
@@ -35,18 +39,23 @@ export function useMaskStrokeHandlers({ activeImage, brushSettings, dispatch }) 
   const handleStrokeStart = useCallback(
     (ix, iy) => {
       if (!activeMaskRef.current || !activeImage) return;
+      originalMaskDataRef.current = new Uint8Array(activeMaskRef.current.maskData);
       strokeAccumulator.current = new Uint8Array(activeMaskRef.current.maskData);
-      paintStroke(
-        strokeAccumulator.current,
-        activeImage.width,
-        activeImage.height,
-        ix,
-        iy,
-        brushSettings,
-      );
+      startPointRef.current = { x: ix, y: iy };
       lastPointRef.current = { x: ix, y: iy };
+      
+      if (brushSettings.tool === 'paint' || brushSettings.tool === 'erase') {
+        paintStroke(
+          strokeAccumulator.current,
+          activeImage.width,
+          activeImage.height,
+          ix,
+          iy,
+          brushSettings,
+        );
+        dispatchMaskUpdate();
+      }
       lastMaskDispatchRef.current = performance.now();
-      dispatchMaskUpdate();
     },
     [activeImage, brushSettings, dispatchMaskUpdate],
   );
@@ -56,22 +65,56 @@ export function useMaskStrokeHandlers({ activeImage, brushSettings, dispatch }) 
       if (!strokeAccumulator.current || !activeMaskRef.current || !activeImage) {
         return;
       }
-      const lastPoint = lastPointRef.current || { x: ix, y: iy };
-      const changed = paintStrokeInterpolated(
-        strokeAccumulator.current,
-        activeImage.width,
-        activeImage.height,
-        lastPoint.x,
-        lastPoint.y,
-        ix,
-        iy,
-        brushSettings,
-      );
-      lastPointRef.current = { x: ix, y: iy };
+      
+      let changed = false;
+      if (brushSettings.tool === 'paint' || brushSettings.tool === 'erase') {
+        const lastPoint = lastPointRef.current || { x: ix, y: iy };
+        changed = paintStrokeInterpolated(
+          strokeAccumulator.current,
+          activeImage.width,
+          activeImage.height,
+          lastPoint.x,
+          lastPoint.y,
+          ix,
+          iy,
+          brushSettings,
+        );
+        lastPointRef.current = { x: ix, y: iy };
+      } else if (brushSettings.tool === 'radial' || brushSettings.tool === 'linear') {
+        // Reset to original before drawing new gradient
+        strokeAccumulator.current.set(originalMaskDataRef.current);
+        const startPoint = startPointRef.current;
+        if (brushSettings.tool === 'radial') {
+          changed = paintRadialGradient(
+            strokeAccumulator.current,
+            activeImage.width,
+            activeImage.height,
+            startPoint.x,
+            startPoint.y,
+            ix,
+            iy,
+            brushSettings
+          );
+        } else {
+          changed = paintLinearGradient(
+            strokeAccumulator.current,
+            activeImage.width,
+            activeImage.height,
+            startPoint.x,
+            startPoint.y,
+            ix,
+            iy,
+            brushSettings
+          );
+        }
+      }
+      
       if (!changed) return;
 
       const now = performance.now();
-      if (now - lastMaskDispatchRef.current >= 16) {
+      // Radial/linear are full-image ops — throttle harder to avoid lag
+      const throttleMs = (brushSettings.tool === 'radial' || brushSettings.tool === 'linear') ? 50 : 16;
+      if (now - lastMaskDispatchRef.current >= throttleMs) {
         lastMaskDispatchRef.current = now;
         dispatchMaskUpdate();
       }
@@ -83,6 +126,8 @@ export function useMaskStrokeHandlers({ activeImage, brushSettings, dispatch }) 
     if (!activeImage || !activeMaskRef.current || !strokeAccumulator.current) {
       strokeAccumulator.current = null;
       lastPointRef.current = null;
+      startPointRef.current = null;
+      originalMaskDataRef.current = null;
       return;
     }
 
@@ -91,11 +136,13 @@ export function useMaskStrokeHandlers({ activeImage, brushSettings, dispatch }) 
       type: "PUSH_HISTORY",
       payload: {
         imageId: activeImage.id,
-        label: `Brush stroke (${brushSettings.tool})`,
+        label: `Mask Tool (${brushSettings.tool})`,
       },
     });
     strokeAccumulator.current = null;
     lastPointRef.current = null;
+    startPointRef.current = null;
+    originalMaskDataRef.current = null;
   }, [activeImage, brushSettings.tool, dispatch, dispatchMaskUpdate]);
 
   return {
