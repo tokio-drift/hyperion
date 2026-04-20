@@ -2,11 +2,18 @@ import express from "express";
 import cors from "cors";
 import fs from "fs";
 import path from "path";
-
+import { fileURLToPath } from "url";
 const app = express();
-
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 app.use(cors());
 app.use(express.json());
+app.use('/api/help', express.static(path.join(__dirname, 'docs')))
+app.use('/assets', express.static(path.join(__dirname, '../frontend/dist/assets')));
+
+app.get("/api/edit", (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+});
 
 app.post("/api/feedback", (req, res) => {
   const { email, message } = req.body;

@@ -58,3 +58,5 @@ node_modules/
 
 # Vite-specific
 .vite/
+
+feedback.txt

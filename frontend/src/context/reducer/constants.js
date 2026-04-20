@@ -30,6 +30,7 @@ export const initialState = {
     exportModalOpen: false,
     galleryOpen: false,
     feedbackModalOpen: false,
+    helpModalOpen: false,
   },
   toasts: [],
   maskMode: false,

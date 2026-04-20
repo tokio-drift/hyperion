@@ -39,6 +39,10 @@ export function reduceUiActions(state, action) {
       return { ...state, ui: { ...state.ui, feedbackModalOpen: true } };
     case "CLOSE_FEEDBACK_MODAL":
       return { ...state, ui: { ...state.ui, feedbackModalOpen: false } };
+    case "OPEN_HELP_MODAL":
+      return { ...state, ui: { ...state.ui, helpModalOpen: true } };
+    case "CLOSE_HELP_MODAL":
+      return { ...state, ui: { ...state.ui, helpModalOpen: false } };
     case "REMOVE_TOAST":
       return {
         ...state,

@@ -1,17 +1,17 @@
-import React, { useEffect, useRef } from 'react';
-import { useEditor } from './context/EditorContext';
-import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
-import Toolbar from './components/toolbar/Toolbar';
-import EditorCanvas from './components/canvas/EditorCanvas';
-import SidePanel from './components/panels/SidePanel';
-import ExportModal from './components/export/ExportModal';
-import FeedbackModal from './components/feedback/FeedbackModal';
-import ToastStack from './components/shared/ToastStack';
-import GalleryView from './components/gallery/GalleryView';
-import UploadZone from './components/upload/UploadZone';
-import { saveSession, loadSession, clearSession } from './utils/sessionStorage';
-
-const LEGACY_SESSION_KEY = 'hyperion_session';
+import React, { useEffect, useRef } from "react";
+import { useEditor } from "./context/EditorContext";
+import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
+import Toolbar from "./components/toolbar/Toolbar";
+import EditorCanvas from "./components/canvas/EditorCanvas";
+import SidePanel from "./components/panels/SidePanel";
+import ExportModal from "./components/export/ExportModal";
+import FeedbackModal from "./components/feedback/FeedbackModal";
+import ToastStack from "./components/shared/ToastStack";
+import GalleryView from "./components/gallery/GalleryView";
+import UploadZone from "./components/upload/UploadZone";
+import { saveSession, loadSession, clearSession } from "./utils/sessionStorage";
+import HelpManual from "./components/help/HelpManual";
+const LEGACY_SESSION_KEY = "hyperion_session";
 
 export default function App() {
   const { state, dispatch, showToast } = useEditor();
@@ -40,7 +40,7 @@ export default function App() {
             localStorage.removeItem(LEGACY_SESSION_KEY);
           } catch {}
         } catch (err) {
-          console.warn('Failed to persist session to IndexedDB:', err);
+          console.warn("Failed to persist session to IndexedDB:", err);
         }
       })();
     }, 900);
@@ -66,9 +66,9 @@ export default function App() {
         if (cancelled) return;
 
         if (restored?.images?.length) {
-          dispatch({ type: 'LOAD_IMAGES', payload: restored.images });
+          dispatch({ type: "LOAD_IMAGES", payload: restored.images });
           dispatch({
-            type: 'RESTORE_SESSION',
+            type: "RESTORE_SESSION",
             payload: {
               adjustments: restored.adjustments,
               crop: restored.crop,
@@ -80,13 +80,13 @@ export default function App() {
           });
 
           showToast(
-            `Session restored (${restored.images.length} image${restored.images.length > 1 ? 's' : ''})`,
-            'success',
-            3800
+            `Session restored (${restored.images.length} image${restored.images.length > 1 ? "s" : ""})`,
+            "success",
+            3800,
           );
         }
       } catch (err) {
-        console.warn('Failed to restore session from IndexedDB:', err);
+        console.warn("Failed to restore session from IndexedDB:", err);
       } finally {
         hydrationDoneRef.current = true;
       }
@@ -98,11 +98,17 @@ export default function App() {
   }, [dispatch, showToast]);
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden" style={{ background: '#111' }}>
+    <div
+      className="flex flex-col h-screen overflow-hidden"
+      style={{ background: "#111" }}
+    >
       <Toolbar />
 
       <div className="flex flex-1 overflow-hidden relative">
-        <div className="flex flex-1 w-full h-full" style={{ display: state.ui.galleryOpen ? 'none' : 'flex' }}>
+        <div
+          className="flex flex-1 w-full h-full"
+          style={{ display: state.ui.galleryOpen ? "none" : "flex" }}
+        >
           <EditorCanvas />
           <SidePanel />
         </div>
@@ -117,7 +123,7 @@ export default function App() {
       </div>
 
       {state.images.length > 1 && !state.ui.galleryOpen && <Filmstrip />}
-
+      <HelpManual />
       <FeedbackModal />
       <ExportModal />
       <ToastStack />
@@ -131,14 +137,16 @@ function Filmstrip() {
   return (
     <div
       className="flex-shrink-0 flex items-center gap-2 px-3 border-t border-gray-800 overflow-x-auto"
-      style={{ height: 72, background: '#1a1a1a' }}
+      style={{ height: 72, background: "#1a1a1a" }}
     >
-      {state.images.map(img => (
+      {state.images.map((img) => (
         <FilmThumb
           key={img.id}
           image={img}
           isActive={img.id === state.activeImageId}
-          onClick={() => dispatch({ type: 'SET_ACTIVE_IMAGE', payload: img.id })}
+          onClick={() =>
+            dispatch({ type: "SET_ACTIVE_IMAGE", payload: img.id })
+          }
         />
       ))}
     </div>
@@ -151,33 +159,37 @@ function FilmThumb({ image, isActive, onClick }) {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !image.originalData) return;
-    
+
     const src = image.originalData;
     const scale = Math.min(52 / (src.width || 1), 48 / (src.height || 1));
     const w = Math.max(1, Math.round((src.width || 1) * scale));
     const h = Math.max(1, Math.round((src.height || 1) * scale));
-    
+
     canvas.width = w;
     canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    
+    const ctx = canvas.getContext("2d");
+
     try {
       let drawable = src;
       if (src.data && !(src instanceof ImageData)) {
-        drawable = new ImageData(new Uint8ClampedArray(src.data), src.width, src.height);
+        drawable = new ImageData(
+          new Uint8ClampedArray(src.data),
+          src.width,
+          src.height,
+        );
       }
 
       if (drawable instanceof ImageData) {
-        const temp = document.createElement('canvas');
+        const temp = document.createElement("canvas");
         temp.width = drawable.width;
         temp.height = drawable.height;
-        temp.getContext('2d').putImageData(drawable, 0, 0);
+        temp.getContext("2d").putImageData(drawable, 0, 0);
         ctx.drawImage(temp, 0, 0, w, h);
       } else {
         ctx.drawImage(drawable, 0, 0, w, h);
       }
     } catch (err) {
-      console.warn('Failed to render filmstrip thumbnail:', err);
+      console.warn("Failed to render filmstrip thumbnail:", err);
     }
   }, [image.originalData]);
 
@@ -187,16 +199,17 @@ function FilmThumb({ image, isActive, onClick }) {
       title={image.name}
       className={`
         flex-shrink-0 flex items-center justify-center rounded overflow-hidden transition-all duration-150
-        ${isActive
-          ? 'ring-2 ring-blue-500 ring-offset-1 ring-offset-black'
-          : 'ring-1 ring-gray-700 hover:ring-gray-500'
+        ${
+          isActive
+            ? "ring-2 ring-blue-500 ring-offset-1 ring-offset-black"
+            : "ring-1 ring-gray-700 hover:ring-gray-500"
         }
       `}
-      style={{ width: 56, height: 56, background: '#2a2a2a' }}
+      style={{ width: 56, height: 56, background: "#2a2a2a" }}
     >
       <canvas
         ref={canvasRef}
-        style={{ maxWidth: '100%', maxHeight: '100%', display: 'block' }}
+        style={{ maxWidth: "100%", maxHeight: "100%", display: "block" }}
       />
     </button>
   );

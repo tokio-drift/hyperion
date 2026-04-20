@@ -1,11 +1,11 @@
 import React, { useState, useCallback } from "react";
-import { useEditor } from "../../context/EditorContext";
+import { useEditor } from "../../context/EditorContext.jsx";
 import {
   imageDataToBlob,
   downloadBlob,
   mimeToExtension,
   replaceExtension,
-} from "../../utils/exportUtils";
+} from "../../utils/exportUtils.js";
 
 const FORMATS = [
   { label: "JPEG", mime: "image/jpeg", hasQuality: true },
