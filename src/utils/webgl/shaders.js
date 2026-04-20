@@ -28,6 +28,11 @@ uniform float uVibrance;
 uniform sampler2D uMaskTexture;
 uniform float uUseMask;
 uniform float uInvertMask;
+uniform float uVignetteAmount;
+uniform float uVignetteMidpoint;
+uniform float uVignetteRoundness;
+uniform float uVignetteFeather;
+uniform vec2  uImageSize;
 
 varying vec2 vUv;
 
@@ -174,6 +179,46 @@ void main() {
     hsl.x = hueDeg / 360.0;
     hsl.y = clamp(sat, 0.0, 1.0);
     color = hslToRgb(hsl);
+  }
+
+  // ── Vignette ──
+  if (uVignetteAmount != 0.0) {
+    float cx = uImageSize.x * 0.5;
+    float cy = uImageSize.y * 0.5;
+    float maxDim = max(cx, cy);
+    float midpoint = uVignetteMidpoint / 100.0;
+    float feather = max(0.01, uVignetteFeather / 100.0);
+    float roundness = uVignetteRoundness / 100.0;
+    float strength = abs(uVignetteAmount) / 100.0;
+
+    float aspectX = cx / maxDim;
+    float aspectY = cy / maxDim;
+    float rx = roundness >= 0.0 ? aspectX + (1.0 - aspectX) * roundness : aspectX * (1.0 + roundness);
+    float ry = roundness >= 0.0 ? aspectY + (1.0 - aspectY) * roundness : aspectY * (1.0 + roundness);
+
+    // Map UV to pixel coords
+    float px = vUv.x * uImageSize.x;
+    float py = vUv.y * uImageSize.y;
+    float nx = (px - cx) / (cx * max(rx, 0.01));
+    float ny = (py - cy) / (cy * max(ry, 0.01));
+    float dist = sqrt(nx * nx + ny * ny);
+
+    float vigStart = midpoint;
+    float vigEnd = midpoint + feather;
+    float factor = 0.0;
+    if (dist > vigStart) {
+      factor = min(1.0, (dist - vigStart) / (vigEnd - vigStart));
+    }
+
+    if (factor > 0.0) {
+      float vigAmount = factor * strength;
+      if (uVignetteAmount < 0.0) {
+        color *= (1.0 - vigAmount);
+      } else {
+        color = color + (vec3(1.0) - color) * vigAmount;
+      }
+      color = clamp(color, 0.0, 1.0);
+    }
   }
 
   float blend = 1.0;
