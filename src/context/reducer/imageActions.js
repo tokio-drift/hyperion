@@ -1,3 +1,5 @@
+// src/context/reducer/imageActions.js
+
 import { defaultAdjustments } from "./constants";
 import { makeEntry } from "../../utils/historyUtils";
 
@@ -49,6 +51,38 @@ export function reduceImageActions(state, action) {
         crop,
         history: hist,
         historyIndex: histIdx,
+      };
+    }
+
+    case "DELETE_IMAGE": {
+      const { imageId } = action.payload;
+      const newImages = state.images.filter((img) => img.id !== imageId);
+      
+      let newActiveId = state.activeImageId;
+      if (newActiveId === imageId) {
+        newActiveId = newImages.length > 0 ? newImages[newImages.length - 1].id : null;
+      }
+
+      const newAdjustments = { ...state.adjustments };
+      delete newAdjustments[imageId];
+      
+      const newCrop = { ...state.crop };
+      delete newCrop[imageId];
+      
+      const newHistory = { ...state.history };
+      delete newHistory[imageId];
+      
+      const newHistoryIndex = { ...state.historyIndex };
+      delete newHistoryIndex[imageId];
+
+      return {
+        ...state,
+        images: newImages,
+        activeImageId: newActiveId,
+        adjustments: newAdjustments,
+        crop: newCrop,
+        history: newHistory,
+        historyIndex: newHistoryIndex,
       };
     }
 

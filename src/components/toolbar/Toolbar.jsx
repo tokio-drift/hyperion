@@ -1,3 +1,5 @@
+// src/components/toolbar/Toolbar.jsx
+
 import React, { useRef, useEffect } from 'react';
 import { useEditor } from '../../context/EditorContext';
 import Tooltip from '../shared/Tooltip';
@@ -45,7 +47,6 @@ export default function Toolbar() {
   const { compareMode } = state;
   const isComparePressedRef = useRef(false);
 
-  // Handle document-level mouse events for compare button
   useEffect(() => {
     const handleDocumentMouseUp = () => {
       if (isComparePressedRef.current) {
@@ -63,7 +64,6 @@ export default function Toolbar() {
       className="flex items-center gap-1 px-3 flex-shrink-0 border-b border-gray-800"
       style={{ height: 48, background: '#1a1a1a' }}
     >
-      {/* Logo */}
       <div className="flex items-center gap-2 mr-3 flex-shrink-0">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <circle cx="12" cy="12" r="9" stroke="#3b82f6" strokeWidth="1.5"/>
@@ -74,15 +74,26 @@ export default function Toolbar() {
 
       <Divider />
 
-      {/* Open */}
       <TBtn onClick={() => window.__hyperionOpenFilePicker?.()} tooltip="Open Image (Ctrl+O)">
         <svg {...ip}><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
         <span className="text-xs">Open</span>
       </TBtn>
 
+      <TBtn 
+        onClick={() => {
+          if (activeImage && window.confirm('Close this image? Unsaved changes will be lost.')) {
+            dispatch({ type: 'DELETE_IMAGE', payload: { imageId: activeImage.id } });
+          }
+        }} 
+        disabled={!activeImage} 
+        tooltip="Close Image"
+      >
+        <svg {...ip}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        <span className="text-xs hidden sm:inline">Close</span>
+      </TBtn>
+
       <Divider />
 
-      {/* Undo / Redo */}
       <TBtn
         onClick={() => activeImage && dispatch({ type: 'UNDO', payload: { imageId: activeImage.id } })}
         disabled={!canUndo} tooltip="Undo (Ctrl+Z)"
@@ -98,7 +109,6 @@ export default function Toolbar() {
 
       <Divider />
 
-      {/* Compare (hold) */}
       <TBtn
         onMouseDown={() => {
           isComparePressedRef.current = true;
@@ -118,17 +128,15 @@ export default function Toolbar() {
         active={compareMode}
       >
         <svg {...ip}><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/></svg>
-        <span className="text-xs">Compare</span>
+        <span className="text-xs hidden sm:inline">Compare</span>
       </TBtn>
 
-      {/* Fit to screen */}
       <TBtn onClick={() => window.__hyperionFitToScreen?.()} tooltip="Fit to screen (Ctrl+0)">
         <svg {...ip}><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
       </TBtn>
 
       <div className="flex-1" />
 
-      {/* Export */}
       <TBtn
         onClick={() => dispatch({ type: 'OPEN_EXPORT_MODAL' })}
         tooltip="Export (Ctrl+E)"
@@ -138,7 +146,6 @@ export default function Toolbar() {
         <span className="text-xs">Export</span>
       </TBtn>
 
-      {/* Toggle panel */}
       <TBtn
         onClick={() => dispatch({ type: 'TOGGLE_SIDE_PANEL' })}
         tooltip="Toggle panel (Tab)"
