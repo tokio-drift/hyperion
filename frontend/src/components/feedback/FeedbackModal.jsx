@@ -14,7 +14,9 @@ export default function FeedbackModal() {
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:5000/api/feedback", {
+      // Use environment variable or fallback to localhost for development
+      const backendURL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
+      const res = await fetch(`${backendURL}/api/feedback`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, message }),

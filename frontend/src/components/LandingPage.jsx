@@ -62,7 +62,7 @@ export default function LandingPage() {
   }, []);
 
   const handleEnter = () => {
-    window.location.href = '/api/edit';
+    window.location.href = '/editor';
   };
 
   return (
