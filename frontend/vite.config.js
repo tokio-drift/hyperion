@@ -6,12 +6,16 @@ export default defineConfig({
   worker: {
     format: 'es',
   },
-  // During dev, all routes fall back to index.html so client routing works
-  server: {
-    historyApiFallback: true,
-  },
-  // Ensure build output is predictable for server.js path references
   build: {
     outDir: 'dist',
+  },
+  server: {
+    // Proxy /api/* to the local Express backend during `npm run dev`
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+      },
+    },
   },
 })

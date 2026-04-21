@@ -5,9 +5,9 @@ import LandingPage from './components/LandingPage.jsx';
 import { EditorProvider } from './context/EditorContext.jsx';
 import './index.css';
 
-// Route: /api/home → LandingPage, everything else → Editor App
-const path = window.location.pathname;
-const isHome = path === '/' || path === '/api/home' || path === '/home';
+// Route: /home or / → LandingPage   |   /edit → Editor
+const p = window.location.pathname;
+const isHome = p === '/' || p === '/home';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

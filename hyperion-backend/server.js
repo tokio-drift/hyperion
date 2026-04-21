@@ -1,8 +1,8 @@
-import express from "express";
-import cors from "cors";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
+import express from 'express';
+import cors from 'cors';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 const app = express();
 const __filename = fileURLToPath(import.meta.url);
@@ -11,52 +11,39 @@ const __dirname = path.dirname(__filename);
 app.use(cors());
 app.use(express.json());
 
-// Static assets — docs and built frontend assets
-app.use('/api/help', express.static(path.join(__dirname, 'docs')));
-app.use('/assets', express.static(path.join(__dirname, '../frontend/dist/assets')));
+app.use(express.static(path.join(__dirname, '../frontend/dist')));
 
-// ── GET /api/home — Landing page ─────────────────────────────────────────────
-// Serves the built frontend SPA; client-side routing detects the /api/home
-// path and renders the LandingPage component instead of the editor.
-app.get("/api/home", (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
-});
-
-// ── GET /api/edit — Editor page ──────────────────────────────────────────────
-app.get("/api/edit", (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
-});
-
-// ── Root redirect → home ─────────────────────────────────────────────────────
-app.get("/", (req, res) => {
-  res.redirect("/api/home");
-});
-
-// ── POST /api/feedback ────────────────────────────────────────────────────────
-app.post("/api/feedback", (req, res) => {
+app.post('/api/feedback', (req, res) => {
   const { email, message } = req.body;
 
   if (!message) {
-    return res.status(400).json({ error: "Message is required" });
+    return res.status(400).json({ error: 'Message is required' });
   }
 
   const timestamp = new Date().toLocaleString();
-  const entry = `ID: ${Date.now()}\nDATE: ${timestamp}\nFROM: ${email || "Anonymous"}\nMSG: ${message}\n${"=".repeat(20)}\n`;
+  const entry =
+    `ID: ${Date.now()}\nDATE: ${timestamp}\nFROM: ${email || 'Anonymous'}\nMSG: ${message}\n${'='.repeat(20)}\n`;
 
-  const filePath = path.join(process.cwd(), "feedback.txt");
+  const filePath = path.join(process.cwd(), 'feedback.txt');
 
   fs.appendFile(filePath, entry, (err) => {
     if (err) {
-      console.error("Write error:", err);
-      return res.status(500).json({ error: "Could not write to file" });
+      console.error('Write error:', err);
+      return res.status(500).json({ error: 'Could not write to file' });
     }
-    console.log("Feedback saved to feedback.txt");
+    console.log('Feedback saved to feedback.txt');
     res.status(200).json({ success: true });
   });
 });
 
+const distIndex = path.join(__dirname, '../frontend/dist/index.html');
+
+app.get('/', (_req, res) => res.redirect('/home'));
+app.get('/home', (_req, res) => res.sendFile(distIndex));
+app.get('/edit', (_req, res) => res.sendFile(distIndex));
+
 app.listen(5000, () => {
-  console.log("Hyperion server running on http://localhost:5000");
-  console.log("  → Landing: http://localhost:5000/api/home");
-  console.log("  → Editor:  http://localhost:5000/api/edit");
+  console.log('Hyperion dev server → http://localhost:5000');
+  console.log('  Landing : http://localhost:5000/home');
+  console.log('  Editor  : http://localhost:5000/edit');
 });

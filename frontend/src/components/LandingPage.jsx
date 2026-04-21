@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import bgImage from '/imgg.jpg';
 
 // Animated film-grain canvas overlay
 function GrainOverlay() {
@@ -62,7 +63,7 @@ export default function LandingPage() {
   }, []);
 
   const handleEnter = () => {
-    window.location.href = '/api/edit';
+    window.location.href = '/edit';
   };
 
   return (
@@ -86,7 +87,7 @@ export default function LandingPage() {
           position: 'absolute',
           inset: 0,
           zIndex: 0,
-          backgroundImage: "url('/imgg.jpg')",
+          backgroundImage: `url(${bgImage})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center 30%',
           backgroundRepeat: 'no-repeat',

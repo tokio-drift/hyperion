@@ -1,0 +1,49 @@
+{
+  "tonal": {
+    "title": "Light & Tonal Control",
+    "description": "The foundation of any edit. Proper tonal balance ensures your subject is visible and the mood is set correctly.",
+    "steps": [
+      "Exposure: Multiplies overall brightness. Use this to correct 'underexposed' (too dark) or 'overexposed' (too bright) shots.",
+      "Contrast: Increases the difference between light and dark. High contrast creates drama; low contrast creates a soft, hazy look.",
+      "Highlights & Shadows: Drag Highlights left to recover details in bright skies. Drag Shadows right to reveal details in dark areas without affecting the whole image.",
+      "Whites & Blacks: Sets the 'true white' and 'true black' points. This ensures your image has a full dynamic range without looking 'muddy'."
+    ]
+  },
+  "colour": {
+    "title": "Colour & Emotion",
+    "description": "Color temperature is a powerful storytelling tool. Warmer tones (yellows) feel inviting, while cooler tones (blues) feel clinical or somber.",
+    "steps": [
+      "Temperature: Corrects 'color casts' caused by different light sources (e.g., indoor tungsten vs. outdoor shade).",
+      "Vibrance vs. Saturation: Use Vibrance to boost muted colors safely. Use Saturation sparingly, as it can easily make skin tones look orange.",
+      "Hue: Rotates the entire color spectrum. Best used for creative effects or correcting specific minor color shifts."
+    ]
+  },
+  "mask": {
+    "title": "Local Masking (Selective Editing)",
+    "description": "In photography, you rarely want the same edit applied to the whole photo. Masking allows you to 'guide' the viewer's eye.",
+    "steps": [
+      "Brush Tool: Paint exactly where you want an effect. Great for brightening a subject's face or darkening a distracting background.",
+      "Linear Gradient: Simulates a 'Graduated Neutral Density' filter. Perfect for darkening a bright sky while leaving the foreground untouched.",
+      "Radial Gradient: Creates a focal point. Use it to create a custom spotlight on your subject.",
+      "Shortcuts: Press 'B' to toggle Mask Mode once a mask is created."
+    ]
+  },
+  "dimension": {
+    "title": "Composition & Framing",
+    "description": "How you frame your subject determines how the viewer perceives the story.",
+    "steps": [
+      "Crop (Key: C): Use the 'Rule of Thirds' by placing your subject on the grid lines to create a more balanced, professional composition.",
+      "Aspect Ratios: 1:1 is for social icons; 16:9 is cinematic; 4:5 is the standard for portrait-oriented social posts.",
+      "Rotate: Level your horizons. A tilted horizon is often a sign of an amateur shot unless used for a specific 'Dutch Angle' effect."
+    ]
+  },
+  "history": {
+    "title": "The Editing Workflow",
+    "description": "Editing is an iterative process. Never be afraid to experiment.",
+    "steps": [
+      "Undo/Redo (Ctrl+Z / Ctrl+Y): Quickly toggle between versions to see if your change actually improved the image.",
+      "Compare (Space): The most important tool. Hold Space to see the original. If the original looks better, you've over-edited!",
+      "Jump in Time: Click any entry in the list to instantly revert the entire project to that specific moment."
+    ]
+  }
+}
