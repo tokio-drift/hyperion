@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useEditor } from "../../context/EditorContext";
 import { useHistory } from "../../hooks/useHistory";
 import { useImageProcessor } from "../../hooks/useImageProcessor";
@@ -15,39 +15,44 @@ export default function DimensionPanel() {
   const [lockAspect, setLockAspect] = useState(true);
   const [resizeError, setResizeError] = useState("");
 
+  // Keep a ref to activeImage so onResult callback always has the latest value
+  const activeImageRef = useRef(activeImage);
+  useEffect(() => { activeImageRef.current = activeImage; }, [activeImage]);
+
   // Track whether the last worker job was a rotate or crop (so onResult knows to patch history)
   const lastJobWasRotate = React.useRef(false);
   const lastJobWasCrop = React.useRef(false);
 
-  const { rotateImage, cropImage } = useImageProcessor({
-    onResult: (imageData) => {
-      if (!activeImage) return;
+  const onResult = useCallback((imageData) => {
+    const img = activeImageRef.current;
+    if (!img) return;
+    dispatch({
+      type: "UPDATE_IMAGE_DATA",
+      payload: {
+        imageId: img.id,
+        originalData: imageData,
+        width: imageData.width,
+        height: imageData.height,
+      },
+    });
+    // Patch the history entry so REDO can restore post-rotation/crop pixel data
+    if (lastJobWasRotate.current) {
       dispatch({
-        type: "UPDATE_IMAGE_DATA",
-        payload: {
-          imageId: activeImage.id,
-          originalData: imageData,
-          width: imageData.width,
-          height: imageData.height,
-        },
+        type: "PATCH_HISTORY_IMAGE_DATA",
+        payload: { imageId: img.id, postRotateData: imageData },
       });
-      // Patch the history entry so REDO can restore post-rotation/crop pixel data
-      if (lastJobWasRotate.current) {
-        dispatch({
-          type: "PATCH_HISTORY_IMAGE_DATA",
-          payload: { imageId: activeImage.id, postRotateData: imageData },
-        });
-        lastJobWasRotate.current = false;
-      }
-      if (lastJobWasCrop.current) {
-        dispatch({
-          type: "PATCH_HISTORY_IMAGE_DATA",
-          payload: { imageId: activeImage.id, postCropData: imageData },
-        });
-        lastJobWasCrop.current = false;
-      }
-    },
-  });
+      lastJobWasRotate.current = false;
+    }
+    if (lastJobWasCrop.current) {
+      dispatch({
+        type: "PATCH_HISTORY_IMAGE_DATA",
+        payload: { imageId: img.id, postCropData: imageData },
+      });
+      lastJobWasCrop.current = false;
+    }
+  }, [dispatch]);
+
+  const { rotateImage, cropImage } = useImageProcessor({ onResult });
 
   // Sync resize inputs with image dimensions
   useEffect(() => {
@@ -108,19 +113,20 @@ export default function DimensionPanel() {
     if (!activeImage || !activeCrop) return;
     const { x, y, width, height } = activeCrop;
 
-    // FIX 2: Prevent passing floating point numbers from mouse-dragging to the Web Worker array logic
+    // Prevent passing floating point numbers from mouse-dragging to the Web Worker array logic
     const safeX = Math.round(x);
     const safeY = Math.round(y);
     const safeW = Math.round(width);
     const safeH = Math.round(height);
 
+    if (safeW < 1 || safeH < 1) return;
+
     lastJobWasCrop.current = true;
     cropImage(activeImage.originalData, safeX, safeY, safeW, safeH);
-    // Store pre-crop data so undo/redo works properly
+    // APPLY_CROP already pushes a history entry — do not call push() again
     dispatch({ type: "APPLY_CROP", payload: { imageId: activeImage.id, preCropData: activeImage.originalData } });
-    push("Crop applied");
     setConfirmCrop(false);
-  }, [activeImage, activeCrop, cropImage, dispatch, push]);
+  }, [activeImage, activeCrop, cropImage, dispatch]);
 
   // ── Rotate ─────────────────────────────────────────────────────────────
   const rotate = useCallback(
@@ -128,6 +134,7 @@ export default function DimensionPanel() {
       if (!activeImage) return;
       lastJobWasRotate.current = true;
       rotateImage(activeImage.originalData, direction);
+      // ROTATE_IMAGE pushes a history entry — do not call push() again
       dispatch({
         type: "ROTATE_IMAGE",
         payload: { imageId: activeImage.id, direction },
@@ -137,9 +144,8 @@ export default function DimensionPanel() {
         type: "ROTATE_MASKS",
         payload: { imageId: activeImage.id, direction },
       });
-      push(direction === "cw" ? "Rotate 90° CW" : "Rotate 90° CCW");
     },
-    [activeImage, rotateImage, dispatch, push],
+    [activeImage, rotateImage, dispatch],
   );
 
   // ── Resize ─────────────────────────────────────────────────────────────

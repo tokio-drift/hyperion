@@ -41,6 +41,16 @@ body {
   background-color: #1e1e1e;
 }
 
+/* Panel section — consistent padding and bottom border for every section block */
+.panel-section {
+  padding: 14px 16px;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.panel-section:last-child {
+  border-bottom: none;
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
